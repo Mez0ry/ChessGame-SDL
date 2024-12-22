@@ -15,6 +15,8 @@ Application::Application() : m_bIsRunning(true) {
   Engine::RegisterModule<Window>("Chess Game SDL",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,800,700, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
   Engine::RegisterModule<Renderer>(Engine::GetModule<Window>(),-1,SDL_RENDERER_ACCELERATED);
   Engine::RegisterModule<EventHandler>();
+
+  Engine::GetModule<Window>()->SetIcon("resources/logo/logo.png");
 }
 
 Application::~Application() {}
