@@ -2,6 +2,9 @@
 *.d
 *.log
 build
+*vscode
+chess
+notes
 
 # Compiled Object files
 *.slo
