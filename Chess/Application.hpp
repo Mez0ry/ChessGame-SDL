@@ -1,8 +1,7 @@
-#ifndef __CHESS_Application_HPP__
-#define __CHESS_Application_HPP__
+#ifndef __CHESS_APPLICATION_HPP__
+#define __CHESS_APPLICATION_HPP__
 #include <cstdint>
 #include "SceneManager.hpp"
-
 class Application
 {
 public:
@@ -19,4 +18,4 @@ private:
     bool m_bIsRunning;
     SceneManager m_SceneManager;
 };
-#endif //!__CHESS_Application_HPP__
+#endif //!__CHESS_APPLICATION_HPP__
