@@ -5,6 +5,8 @@
 
 #include "Renderer.hpp"
 
+#include "Menu.hpp"
+
 Application::Application() : m_bIsRunning(true) {
   if(!Engine::Initialize(SDL_INIT_EVERYTHING,IMG_INIT_PNG | IMG_INIT_JPG,true)){
     STELLAR_CRITICAL_THROW(std::runtime_error,"","Failed to initialize engine");
@@ -17,6 +19,8 @@ Application::Application() : m_bIsRunning(true) {
   Engine::RegisterModule<EventHandler>();
 
   Engine::GetModule<Window>()->SetIcon("resources/logo/logo.png");
+
+  m_SceneManager.AddScene<Menu>(Engine::GetModule<Renderer>(),Engine::GetModule<Window>(),m_SceneManager);
 }
 
 Application::~Application() {}
