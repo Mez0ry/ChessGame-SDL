@@ -6,6 +6,8 @@
 #include "Renderer.hpp"
 
 #include "Menu.hpp"
+#include "Lerp.hpp"
+#include "Easing.hpp"
 
 Application::Application() : m_bIsRunning(true) {
   if(!Engine::Initialize(SDL_INIT_EVERYTHING,IMG_INIT_PNG | IMG_INIT_JPG,true)){
@@ -15,12 +17,18 @@ Application::Application() : m_bIsRunning(true) {
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
 
   Engine::RegisterModule<Window>("Chess Game SDL",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,800,700, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+  SDL_SetWindowOpacity(*Engine::GetModule<Window>(),0);
   Engine::RegisterModule<Renderer>(Engine::GetModule<Window>(),-1,SDL_RENDERER_ACCELERATED);
   Engine::RegisterModule<EventHandler>();
 
   Engine::GetModule<Window>()->SetIcon("resources/logo/logo.png");
-
+  
   m_SceneManager.AddScene<Menu>(Engine::GetModule<Renderer>(),Engine::GetModule<Window>(),m_SceneManager);
+
+  m_WindowSmoothShow.Setup(2,[&](float t){
+    auto final_opacity = Stellar::Lerp(0,1,t);
+    SDL_SetWindowOpacity(Engine::GetModule<Window>()->GetWindow(),Stellar::Easing::EaseInOutSine(final_opacity));
+  });
 }
 
 Application::~Application() {}
@@ -73,7 +81,8 @@ void Application::HandleInput() {
  m_SceneManager.HandleInput(event_handler);
 }
 
-void Application::Update(float dt) {   
+void Application::Update(float dt) {
+  m_WindowSmoothShow.Update(dt);
   m_SceneManager.Update(dt);
 }
 
