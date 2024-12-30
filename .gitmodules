@@ -1,3 +1,0 @@
-[submodule "vendor/Stellar"]
-	path = vendor
-	url = git@github.com:Mez0ry/Stellar2.git
