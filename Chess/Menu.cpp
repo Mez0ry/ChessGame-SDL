@@ -1,4 +1,8 @@
 #include "Menu.hpp"
+#include "SceneManager.hpp"
+
+#include "Exit.hpp"
+
 #include "Renderer.hpp"
 #include "Window.hpp"
 #include "TextureGuard.hpp"
@@ -6,26 +10,34 @@
 #include "Lerp.hpp"
 #include "AABB.hpp"
 
-Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, SceneManager &scene_manager) : m_Renderer(renderer), m_SceneManager(scene_manager), m_Navigation("resources/UI/kenney_fantasy-ui/Double/Border/panel-border-023.png", renderer, window, m_HoverableTexts)
+
+Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, SceneManager &scene_manager) : m_Renderer(renderer), m_SceneManager(scene_manager), m_Navigation("resources/UI/kenney_fantasy-ui/Double/Border/panel-border-023.png", renderer, window, m_TextVec)
 {
   auto [win_w, win_h] = window->GetWindowSize();
 
-  Font text_font = Font::StaticLoadFont("resources/fonts/UrbanJungle/UrbanJungleDEMO.otf", win_w * 0.095); //resources/fonts/Wombyland/OpenType-TT/WombyLand.ttf
+  Font text_font = Font::StaticLoadFont("resources/fonts/UrbanJungle/UrbanJungleDEMO.otf", win_w * 0.095);
 
   for (uint8_t idx = 0; idx < m_MenuOptionsText.size(); idx++)
   {
-    m_HoverableTexts.push_back(Hoverable<Text>());
+    m_TextVec.push_back(Clickable<Hoverable<Text>>());
 
-    auto &curr = m_HoverableTexts[idx];
+    auto &curr = m_TextVec[idx];
     curr.LoadText(text_font, m_MenuOptionsText[idx].c_str(), Color(81, 82, 92, 255));
   }
 
-  OnResize(window);
+  uint8_t play_idx = 0, settings_idx = 1, exit_idx = 2;
+
+  m_TextVec[exit_idx].OnClick([&](){
+    m_SceneManager.TransitionTo<Menu,Exit>();
+  });
+  
   m_Renderer->SetRenderDrawColor(Color(41, 44, 92, 255));
+  OnResize(window);
 }
 
 void Menu::OnCreate()
 {
+  m_Renderer->SetRenderDrawColor(Color(41, 44, 92, 255));
   m_Navigation.OnCreate();
 }
 
@@ -37,7 +49,7 @@ void Menu::OnResize([[maybe_unused]] const Core::Ref<Window> window)
   ObjectSize text_size(win_w * 0.120, win_h * 0.064);
 
   uint16_t dy_offset = 0;
-  for (auto &text : m_HoverableTexts)
+  for (auto &text : m_TextVec)
   {
 
     Vec2i new_pos;
@@ -56,10 +68,17 @@ void Menu::OnResize([[maybe_unused]] const Core::Ref<Window> window)
 
 void Menu::OnDestroy()
 {
+  m_Navigation.OnDestroy();
 }
 
 void Menu::HandleInput(const Core::Ref<EventHandler> event_handler)
 {
+  for(auto& text : m_TextVec){
+    if(text.IsClicked()){
+      text.Execute();
+    }
+  }
+
   m_Navigation.HandleInput(event_handler);
 }
 
@@ -70,17 +89,19 @@ void Menu::Update(float dt)
 
 void Menu::Render(const Core::Ref<Renderer> renderer)
 {
-  for (auto &text : m_HoverableTexts)
+  for (auto &text : m_TextVec)
   {
     renderer->Render(text,TextRenderType::BLENDED);
   }
   m_Navigation.Render(renderer);
 }
 
-Navigation::Navigation(const std::string &border_path, const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, std::vector<Hoverable<Text>> &hoverable_text) : m_Renderer(renderer), m_Window(window), m_HoverableTexts(hoverable_text), m_CurrTextIdx(0), m_TargetChanged(true)
+Navigation::Navigation(const std::string &border_path, const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, std::vector<Clickable<Hoverable<Text>>> &text_vec) : m_Renderer(renderer), m_Window(window), m_TextVec(text_vec), m_CurrTextIdx(0), m_TargetChanged(true)
 {
   LoadBorderTexture(border_path);
   m_BorderKeyFrame.Setup(0.100f, [&](float t){
+    if(m_BorderPosMemento.IsEmpty()) 
+      return;
     int dy = Stellar::Lerp(m_BorderPosMemento.GetState().y,m_TargetBorderPos.y,t);
 
     m_BorderTexture.SetPosition({m_TargetBorderPos.x,dy}); 
@@ -97,9 +118,14 @@ void Navigation::OnCreate()
   SetTextIdx(0);
 }
 
+void Navigation::OnDestroy()
+{
+  m_BorderPosMemento.ClearSnapshots();
+}
+
 void Navigation::OnResize()
 {
-  auto &current_text = m_HoverableTexts[m_CurrTextIdx];
+  auto &current_text = m_TextVec[m_CurrTextIdx];
 
   auto border_size = m_BorderTexture.GetSize();
 
@@ -114,19 +140,19 @@ void Navigation::OnResize()
 
 void Navigation::HandleInput(const Core::Ref<EventHandler> event_handler)
 {
-  for (auto i = 0; i < m_HoverableTexts.size(); i++)
+  for (auto i = 0; i < m_TextVec.size(); i++)
   {
-    auto &loaded_text = m_HoverableTexts[i].GetLoadedText();
-    if (AABB::isColliding(m_BorderTexture.GetRect(), m_HoverableTexts[i]->GetRect()) && i == m_CurrTextIdx)
+    auto &loaded_text = m_TextVec[i].GetLoadedText();
+    if (AABB::isColliding(m_BorderTexture.GetRect(), m_TextVec[i]->GetRect()) && i == m_CurrTextIdx)
     {
-      m_HoverableTexts[i].ChangeColor(Color(124, 79, 193, 255));
+      m_TextVec[i].ChangeColor(Color(124, 79, 193, 255));
     }
     else
     {
-      m_HoverableTexts[i].ChangeColor(Color(81, 82, 92, 255));
+      m_TextVec[i].ChangeColor(Color(81, 82, 92, 255));
     }
 
-    if (m_HoverableTexts[i].IsHovered() && !m_BorderKeyFrame.IsFinished() && !m_TargetChanged)
+    if (m_TextVec[i].IsHovered() && !m_BorderKeyFrame.IsFinished() && !m_TargetChanged)
     {
       SetTextIdx(i);
     }
@@ -156,10 +182,10 @@ void Navigation::SetTextIdx(size_t idx)
   if (m_CurrTextIdx == idx)
     return;
 
-  auto clamped = std::clamp(idx, size_t(0), m_HoverableTexts.size());
-  auto prev_curr_text_idx = std::clamp(static_cast<uint8_t>(m_CurrTextIdx), static_cast<uint8_t>(0), static_cast<uint8_t>(m_HoverableTexts.size()));
+  auto clamped = std::clamp(idx, size_t(0), m_TextVec.size());
+  auto prev_curr_text_idx = std::clamp(static_cast<uint8_t>(m_CurrTextIdx), static_cast<uint8_t>(0), static_cast<uint8_t>(m_TextVec.size()));
   
-  const auto& pos = m_HoverableTexts[prev_curr_text_idx]->GetPosition();
+  const auto& pos = m_TextVec[prev_curr_text_idx]->GetPosition();
   m_BorderPosMemento.Save(pos);
 
   this->m_CurrTextIdx = clamped;

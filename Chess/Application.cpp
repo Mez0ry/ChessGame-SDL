@@ -3,11 +3,11 @@
 #include "Engine.hpp"
 #include "EventHandler.hpp"
 
-#include "Renderer.hpp"
+#include "Easing.hpp"
+#include "Lerp.hpp"
 
 #include "Menu.hpp"
-#include "Lerp.hpp"
-#include "Easing.hpp"
+#include "Exit.hpp"
 
 Application::Application() : m_bIsRunning(true) {
   if(!Engine::Initialize(SDL_INIT_EVERYTHING,IMG_INIT_PNG | IMG_INIT_JPG,true)){
@@ -24,7 +24,8 @@ Application::Application() : m_bIsRunning(true) {
   Engine::GetModule<Window>()->SetIcon("resources/logo/logo.png");
   
   m_SceneManager.AddScene<Menu>(Engine::GetModule<Renderer>(),Engine::GetModule<Window>(),m_SceneManager);
-
+  m_SceneManager.AddChildScene<Menu,Exit>(Engine::GetModule<Renderer>(),Engine::GetModule<Window>(),m_bIsRunning);
+  
   m_WindowSmoothShow.Setup(2,[&](float t){
     auto final_opacity = Stellar::Lerp(0,1,t);
     SDL_SetWindowOpacity(Engine::GetModule<Window>()->GetWindow(),Stellar::Easing::EaseInOutSine(final_opacity));
