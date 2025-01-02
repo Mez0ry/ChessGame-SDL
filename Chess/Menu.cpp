@@ -197,7 +197,7 @@ void Navigation::OnResize()
 
 }
 
-void Navigation::HandleInput(const Core::Ref<EventHandler> event_handler)
+void Navigation::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> event_handler)
 {
   for (size_t i = 0; i < m_TextVec.size(); i++)
   {
