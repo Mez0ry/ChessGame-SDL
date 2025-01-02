@@ -11,7 +11,7 @@
 #include "AABB.hpp"
 
 
-Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, SceneManager &scene_manager) : m_Renderer(renderer), m_SceneManager(scene_manager), m_Navigation("resources/UI/kenney_fantasy-ui/Double/Border/panel-border-023.png", renderer, window, m_TextVec)
+Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, SceneManager &scene_manager) : m_Renderer(renderer),m_Window(window), m_SceneManager(scene_manager), m_Navigation("resources/UI/kenney_fantasy-ui/Double/Border/panel-border-023.png", renderer, window, m_TextVec)
 {
   auto [win_w, win_h] = window->GetWindowSize();
 
@@ -25,42 +25,91 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
     curr.LoadText(text_font, m_MenuOptionsText[idx].c_str(), Color(81, 82, 92, 255));
   }
 
-  uint8_t play_idx = 0, settings_idx = 1, exit_idx = 2;
+  m_PlayKf.Setup(3,[&](float t){
+    const uint8_t play_idx = 0;
 
-  m_TextVec[exit_idx].OnClick([&](){
+    auto& target_text = m_TextVec[play_idx];
+    const auto& target_pos = m_TextPosMementos[play_idx].GetState();
+    int dx = Stellar::Lerp(target_text->GetPosition().x,target_pos.x,t);
+
+    target_text->SetPosition({dx,target_text->GetPosition().y});
+  });
+
+  m_SettingsKf.Setup(2,[&](float t){
+    const uint8_t settings_idx = 1;
+
+    auto& target_text = m_TextVec[settings_idx];
+    const auto& target_pos = m_TextPosMementos[settings_idx].GetState();
+    auto dx = Stellar::Lerp(target_text->GetPosition().x,target_pos.x,t);
+
+    target_text->SetPosition({dx,target_text->GetPosition().y});
+  });
+
+  m_ExitKf.Setup(2,[&](float t){
+    const uint8_t exit_idx = 2;
+
+    auto& target_text = m_TextVec[exit_idx];
+    const auto& target_pos = m_TextPosMementos[exit_idx].GetState();
+    auto dx = Stellar::Lerp(target_text->GetPosition().x,target_pos.x,t);
+
+    target_text->SetPosition({dx,target_text->GetPosition().y});
+  });
+
+  m_TextVec[2].OnClick([&](){
     m_SceneManager.TransitionTo<Menu,Exit>();
   });
   
   m_Renderer->SetRenderDrawColor(Color(41, 44, 92, 255));
   OnResize(window);
+
+  auto cnt = 0;
+  for(auto& text : m_TextVec){
+    auto text_size = text->GetSize();
+
+    Vec2i initial_pos = {0,m_TextPosMementos[cnt].GetState().y};
+    if((cnt & 0) == 0){
+      initial_pos.x = win_w + text_size.GetWidth();
+    }else{
+      initial_pos.x = -text_size.GetWidth();
+    }
+
+    text->SetPosition(initial_pos);
+    cnt++;
+  }
 }
 
 void Menu::OnCreate()
 {
+  auto [win_w, win_h] = m_Window->GetWindowSize();
+
   m_Renderer->SetRenderDrawColor(Color(41, 44, 92, 255));
   m_Navigation.OnCreate();
 }
 
 void Menu::OnResize([[maybe_unused]] const Core::Ref<Window> window)
 {
+  if(!m_TextPosMementos.empty()){
+    m_TextPosMementos.clear();
+  }
+
   auto [win_w, win_h] = window->GetWindowSize();
 
   Rect rect({0, 0}, ObjectSize(win_w, win_h));
-  ObjectSize text_size(win_w * 0.120, win_h * 0.064);
+  const ObjectSize text_size(win_w * 0.120, win_h * 0.064);
 
-  uint16_t dy_offset = 0;
-  for (auto &text : m_TextVec)
+  for (size_t index = {0},dy_offset = {0}; index < m_TextVec.size(); index++,dy_offset += (text_size.GetHeight() * 1.5f))
   {
+    auto& curr_text = m_TextVec[index];
+    
+    Vec2i target_pos;
+    target_pos.x = (rect.Center().x - (text_size.GetWidth() / 2));
+    target_pos.y = (rect.Center().y - (text_size.GetHeight() * 2)) + dy_offset;
 
-    Vec2i new_pos;
-    new_pos.x = (rect.Center().x - (text_size.GetWidth() / 2));
-    new_pos.y = (rect.Center().y - (text_size.GetHeight() * 2)) + dy_offset;
+    target_pos.y += 35;
 
-    new_pos.y += 35;
-
-    text->SetRect(new_pos, text_size);
-
-    dy_offset += text_size.GetHeight() * 1.5f;
+    curr_text->SetSize(text_size);
+    
+    m_TextPosMementos.push_back(Memento<Vec2i>(target_pos));
   }
 
   m_Navigation.OnResize();
@@ -69,6 +118,7 @@ void Menu::OnResize([[maybe_unused]] const Core::Ref<Window> window)
 void Menu::OnDestroy()
 {
   m_Navigation.OnDestroy();
+  m_ExitKf.Restart();
 }
 
 void Menu::HandleInput(const Core::Ref<EventHandler> event_handler)
@@ -84,7 +134,15 @@ void Menu::HandleInput(const Core::Ref<EventHandler> event_handler)
 
 void Menu::Update(float dt)
 {
-  m_Navigation.Update(dt);
+  if(m_Window->GetOpacity() > 0.5f){
+    if(m_PlayKf.Update(dt)){
+       m_Navigation.Update(dt);
+      if(m_SettingsKf.Update(dt)){
+        m_ExitKf.Update(dt);
+      }
+    }
+  }
+   
 }
 
 void Menu::Render(const Core::Ref<Renderer> renderer)
@@ -97,7 +155,7 @@ void Menu::Render(const Core::Ref<Renderer> renderer)
 }
 
 Navigation::Navigation(const std::string &border_path, const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, std::vector<Clickable<Hoverable<Text>>> &text_vec) : m_Renderer(renderer), m_Window(window), m_TextVec(text_vec), m_CurrTextIdx(0), m_TargetChanged(true)
-{
+{   
   LoadBorderTexture(border_path);
   m_BorderKeyFrame.Setup(0.100f, [&](float t){
     if(m_BorderPosMemento.IsEmpty()) 
@@ -106,6 +164,7 @@ Navigation::Navigation(const std::string &border_path, const Core::Ref<Renderer>
 
     m_BorderTexture.SetPosition({m_TargetBorderPos.x,dy}); 
   });
+  
 }
 
 void Navigation::LoadBorderTexture(const std::string &path)
@@ -125,34 +184,35 @@ void Navigation::OnDestroy()
 
 void Navigation::OnResize()
 {
+  auto[win_w,win_h] = m_Window->GetWindowSize();
+
   auto &current_text = m_TextVec[m_CurrTextIdx];
-
-  auto border_size = m_BorderTexture.GetSize();
-
-  auto center = current_text->GetRect().Center();
   auto text_size = current_text->GetSize();
 
-  m_TargetBorderPos.x = center.x - (border_size.GetWidth() / 2);
-  m_TargetBorderPos.y = center.y - (border_size.GetHeight() / 2) * (1.25f);
-  
-  m_BorderTexture.SetRect(m_TargetBorderPos,ObjectSize(text_size.GetWidth() * 2.5f, text_size.GetHeight() * 1.5f));
+  SetupTargetBorderPos(); 
+
+  m_InitialBorderPos = {win_w + m_BorderTexture.GetSize().GetWidth(),m_TargetBorderPos.y};
+  m_BorderTexture.SetRect(m_InitialBorderPos,ObjectSize(text_size.GetWidth() * 2.5f, text_size.GetHeight() * 1.5f));
+  SetTextIdx(0);
+
 }
 
 void Navigation::HandleInput(const Core::Ref<EventHandler> event_handler)
 {
-  for (auto i = 0; i < m_TextVec.size(); i++)
+  for (size_t i = 0; i < m_TextVec.size(); i++)
   {
-    auto &loaded_text = m_TextVec[i].GetLoadedText();
-    if (AABB::isColliding(m_BorderTexture.GetRect(), m_TextVec[i]->GetRect()) && i == m_CurrTextIdx)
+    auto &curr_text = m_TextVec[i];
+
+    if (AABB::isColliding(m_BorderTexture.GetRect(), curr_text->GetRect()) && i == m_CurrTextIdx)
     {
-      m_TextVec[i].ChangeColor(Color(124, 79, 193, 255));
+      curr_text.ChangeColor(Color(124, 79, 193, 255));
     }
     else
     {
-      m_TextVec[i].ChangeColor(Color(81, 82, 92, 255));
+      curr_text.ChangeColor(Color(81, 82, 92, 255));
     }
 
-    if (m_TextVec[i].IsHovered() && !m_BorderKeyFrame.IsFinished() && !m_TargetChanged)
+    if (curr_text.IsHovered() && !m_BorderKeyFrame.IsFinished() && !m_TargetChanged)
     {
       SetTextIdx(i);
     }
@@ -163,7 +223,7 @@ void Navigation::Update(float dt)
 {
   if (m_TargetChanged)
   {
-    OnResize(); // used to update the position of the text border and its size
+    SetupTargetBorderPos();
     if (m_BorderKeyFrame.Update(dt))
     {
       m_TargetChanged = false;
@@ -175,6 +235,19 @@ void Navigation::Update(float dt)
 void Navigation::Render(const Core::Ref<Renderer> renderer)
 {
   renderer->Render(m_BorderTexture);
+}
+
+void Navigation::SetupTargetBorderPos()
+{
+  auto &current_text = m_TextVec[m_CurrTextIdx];
+
+  auto border_size = m_BorderTexture.GetSize();
+
+  auto center = current_text->GetRect().Center();
+  auto text_size = current_text->GetSize();
+
+  m_TargetBorderPos.x = center.x - (border_size.GetWidth() / 2);
+  m_TargetBorderPos.y = center.y - (border_size.GetHeight() / 2) * (1.25f);
 }
 
 void Navigation::SetTextIdx(size_t idx)

@@ -9,6 +9,8 @@
 #include "Clickable.hpp"
 #include "Hoverable.hpp"
 
+#include <deque>
+
 class Window;
 class Renderer;
 class SceneManager;
@@ -31,6 +33,7 @@ private:
   void Update(float dt);
   void Render(const Core::Ref<Renderer> renderer);
   private:
+  void SetupTargetBorderPos();
   void SetTextIdx(size_t idx);
 
   private:
@@ -39,12 +42,14 @@ private:
   uint8_t m_CurrTextIdx;
   Memento<Vec2i> m_BorderPosMemento;
   Vec2i m_TargetBorderPos;
+  Vec2i m_InitialBorderPos;
   bool m_TargetChanged;
   Stellar::KeyFrame m_BorderKeyFrame;
 };
 class Menu : public GameScene {
 private:
   Core::Ref<Renderer> m_Renderer;
+  Core::Ref<Window> m_Window;
   SceneManager &m_SceneManager;
 public:
   Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window,SceneManager &scene_manager);
@@ -61,6 +66,10 @@ public:
 private:
   Texture m_TitleTexture,m_TitlePanelTexture;
   std::vector<Clickable<Hoverable<Text>>> m_TextVec;
+  std::vector<Memento<Vec2i>> m_TextPosMementos; // used as target pos in lerp
+
+  Stellar::KeyFrame m_PlayKf,m_SettingsKf,m_ExitKf;
+
   std::array<std::string,3> m_MenuOptionsText = {
     "Play","Settings","Exit"
   };
