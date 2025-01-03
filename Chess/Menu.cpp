@@ -2,6 +2,7 @@
 #include "SceneManager.hpp"
 
 #include "Exit.hpp"
+#include "Playing.hpp"
 
 #include "Renderer.hpp"
 #include "Window.hpp"
@@ -9,7 +10,6 @@
 #include "KeyboardInput.hpp"
 #include "Lerp.hpp"
 #include "AABB.hpp"
-
 
 Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, SceneManager &scene_manager) : m_Renderer(renderer),m_Window(window), m_SceneManager(scene_manager), m_Navigation("resources/UI/kenney_fantasy-ui/Double/Border/panel-border-023.png", renderer, window, m_TextVec)
 {
@@ -53,6 +53,10 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
     auto dx = Stellar::Lerp(target_text->GetPosition().x,target_pos.x,t);
 
     target_text->SetPosition({dx,target_text->GetPosition().y});
+  });
+
+   m_TextVec[0].OnClick([&](){
+    m_SceneManager.TransitionTo<Menu,Playing>();
   });
 
   m_TextVec[2].OnClick([&](){
