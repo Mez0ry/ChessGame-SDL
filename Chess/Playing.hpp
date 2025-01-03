@@ -2,6 +2,8 @@
 #define __PLAYING_SCENE_HPP__
 #include "GameScene.hpp"
 
+#include "Board.hpp"
+
 class Renderer;
 class Window;
 
@@ -22,6 +24,7 @@ public:
     void Update(float dt) override;
     void Render(const Core::Ref<Renderer> renderer) override;
 private:
+    Board m_Board;
 };
 
 #endif //!__PLAYING_SCENE_HPP__
