@@ -40,7 +40,7 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
 
     auto& target_text = m_TextVec[settings_idx];
     const auto& target_pos = m_TextPosMementos[settings_idx].GetState();
-    auto dx = Stellar::Lerp(target_text->GetPosition().x,target_pos.x,t);
+    int dx = Stellar::Lerp(target_text->GetPosition().x,target_pos.x,t);
 
     target_text->SetPosition({dx,target_text->GetPosition().y});
   });
@@ -50,7 +50,7 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
 
     auto& target_text = m_TextVec[exit_idx];
     const auto& target_pos = m_TextPosMementos[exit_idx].GetState();
-    auto dx = Stellar::Lerp(target_text->GetPosition().x,target_pos.x,t);
+    int dx = Stellar::Lerp(target_text->GetPosition().x,target_pos.x,t);
 
     target_text->SetPosition({dx,target_text->GetPosition().y});
   });
@@ -71,7 +71,7 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
     auto text_size = text->GetSize();
 
     Vec2i initial_pos = {0,m_TextPosMementos[cnt].GetState().y};
-    if((cnt & 0) == 0){
+    if((cnt & 1) == 0){
       initial_pos.x = win_w + text_size.GetWidth();
     }else{
       initial_pos.x = -text_size.GetWidth();
@@ -84,8 +84,6 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
 
 void Menu::OnCreate()
 {
-  auto [win_w, win_h] = m_Window->GetWindowSize();
-
   m_Renderer->SetRenderDrawColor(Color(41, 44, 92, 255));
   m_Navigation.OnCreate();
 }
