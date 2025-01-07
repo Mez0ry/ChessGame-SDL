@@ -25,7 +25,7 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
     curr.LoadText(text_font, m_MenuOptionsText[idx].c_str(), Color(81, 82, 92, 255));
   }
 
-  m_PlayKf.Setup(3,[&](float t){
+  m_PlayKf.Setup(5,[&](float t){
     const uint8_t play_idx = 0;
 
     auto& target_text = m_TextVec[play_idx];
@@ -34,10 +34,10 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
 
     target_text->SetPosition({dx,target_text->GetPosition().y});
   });
-
-  m_SettingsKf.Setup(2,[&](float t){
+  
+  m_SettingsKf.Setup(5,[&](float t){
     const uint8_t settings_idx = 1;
-
+    
     auto& target_text = m_TextVec[settings_idx];
     const auto& target_pos = m_TextPosMementos[settings_idx].GetState();
     int dx = Stellar::Lerp(target_text->GetPosition().x,target_pos.x,t);
@@ -45,7 +45,7 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
     target_text->SetPosition({dx,target_text->GetPosition().y});
   });
 
-  m_ExitKf.Setup(2,[&](float t){
+  m_ExitKf.Setup(5,[&](float t){
     const uint8_t exit_idx = 2;
 
     auto& target_text = m_TextVec[exit_idx];
@@ -136,13 +136,16 @@ void Menu::HandleInput(const Core::Ref<EventHandler> event_handler)
 
 void Menu::Update(float dt)
 {
-  if(m_Window->GetOpacity() > 0.5f){
-    if(m_PlayKf.Update(dt)){
-       m_Navigation.Update(dt);
-      if(m_SettingsKf.Update(dt)){
-        m_ExitKf.Update(dt);
-      }
-    }
+  if(m_Window->GetOpacity() > 0.5f && m_Window->GetOpacity() < 1.f){
+    m_PlayKf.Update(dt);
+    m_SettingsKf.Update(dt);
+    m_ExitKf.Update(dt);
+      
+  }
+
+  bool one_of_finished = (m_PlayKf.IsFinished() || m_SettingsKf.IsFinished() ||m_ExitKf.IsFinished() );
+  if(one_of_finished){
+    m_Navigation.Update(dt);
   }
    
 }
