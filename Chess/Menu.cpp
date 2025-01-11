@@ -80,6 +80,7 @@ Menu::Menu(const Core::Ref<Renderer> renderer, const Core::Ref<Window> window, S
     text->SetPosition(initial_pos);
     cnt++;
   }
+  m_Navigation.OnResize();
 }
 
 void Menu::OnCreate()
@@ -163,8 +164,7 @@ Navigation::Navigation(const std::string &border_path, const Core::Ref<Renderer>
 {   
   LoadBorderTexture(border_path);
   m_BorderKeyFrame.Setup(0.100f, [&](float t){
-    if(m_BorderPosMemento.IsEmpty()) 
-      return;
+     
     int dy = Stellar::Lerp(m_BorderPosMemento.GetState().y,m_TargetBorderPos.y,t);
 
     m_BorderTexture.SetPosition({m_TargetBorderPos.x,dy}); 
@@ -196,10 +196,9 @@ void Navigation::OnResize()
 
   SetupTargetBorderPos(); 
 
-  m_InitialBorderPos = {win_w + m_BorderTexture.GetSize().GetWidth(),m_TargetBorderPos.y};
-  m_BorderTexture.SetRect(m_InitialBorderPos,ObjectSize(text_size.GetWidth() * 2.5f, text_size.GetHeight() * 1.5f));
+  m_InitialBorderPos = {m_TargetBorderPos.x,m_TargetBorderPos.y};
   SetTextIdx(0);
-
+  m_BorderTexture.SetRect(m_InitialBorderPos,ObjectSize(text_size.GetWidth() * 2.5f, text_size.GetHeight() * 1.5f));
 }
 
 void Navigation::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> event_handler)
@@ -221,6 +220,20 @@ void Navigation::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> even
     {
       SetTextIdx(i);
     }
+  }
+
+  size_t tmp_idx = m_CurrTextIdx;
+
+  if(KeyboardInput::IsKeyUp(SDLK_DOWN)&& !m_BorderKeyFrame.IsFinished() && !m_TargetChanged){
+    tmp_idx += 1;
+    if(tmp_idx >= m_TextVec.size()){
+      tmp_idx = 0;
+    }
+    SetTextIdx(tmp_idx);
+  }else if(KeyboardInput::IsKeyUp(SDLK_UP)&& !m_BorderKeyFrame.IsFinished() && !m_TargetChanged){
+    tmp_idx -= 1;
+    tmp_idx = std::clamp(tmp_idx, size_t(0), m_TextVec.size() - 1);
+    SetTextIdx(tmp_idx);
   }
 }
 
@@ -260,8 +273,8 @@ void Navigation::SetTextIdx(size_t idx)
   if (m_CurrTextIdx == idx)
     return;
 
-  auto clamped = std::clamp(idx, size_t(0), m_TextVec.size());
-  auto prev_curr_text_idx = std::clamp(static_cast<uint8_t>(m_CurrTextIdx), static_cast<uint8_t>(0), static_cast<uint8_t>(m_TextVec.size()));
+  auto clamped = std::clamp(idx, size_t(0), m_TextVec.size() - 1);
+  auto prev_curr_text_idx = std::clamp(static_cast<uint8_t>(m_CurrTextIdx), static_cast<uint8_t>(0), static_cast<uint8_t>(m_TextVec.size() - 1));
   
   const auto& pos = m_TextVec[prev_curr_text_idx]->GetPosition();
   m_BorderPosMemento.Save(pos);
