@@ -23,8 +23,6 @@ public:
     Piece(Texture& texture, PieceType piece_type,Team team);
     ~Piece();
     
-
-    void Update(float dt) override;
     void Render(const Core::Ref<Renderer> renderer) override;
     
     void LoadTexture(const Core::Ref<Renderer> renderer, const char* texture_path);
@@ -45,6 +43,8 @@ public:
      */
     Vec2i GetPosition() const override;
 
+    Vec2i GetPrevPosition() const;
+
     void SetSize(ObjectSize size) override;
     ObjectSize GetSize() const override;
 
@@ -54,30 +54,13 @@ public:
     void StopDragging();
 
     bool IsDragging() const;
-
-    bool IsSmoothMoving() const;
-
-    void ApplySmoothMove(const Vec2i from,const Vec2i to, const Vec2i board_pos_move_to, int frame_duration = 1, const Stellar::easing_type_t& easing = Stellar::Easing::EaseInSine);
-private:
-    struct SmoothMove{
-        Vec2i move_from, move_to, board_move_to;
-        Stellar::easing_type_t easing_type;
-        float frame_duration;
-        Stellar::KeyFrame keyframe;
-    };
-
 private:
     drag_texture_t m_Texture;
-    Vec2i m_Position; // Pos on the board
+    Vec2i m_Position, m_PrevPos; // Pos on the board
 
     PieceType m_PieceType;
     Team m_Team;
     bool m_IsKilled,m_ToMove;
-private: //Smooth stuff
-    std::stack<SmoothMove> m_SmoothMoveStackKF;
-
-    
-    bool m_IsMovingSmoothly;
 };
 
 #endif //!__PIECE_HPP__
