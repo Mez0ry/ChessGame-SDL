@@ -3,6 +3,7 @@
 #include <vector>
 #include <functional>
 #include <unordered_map>
+#include <queue>
 
 #include "ObjectSize.hpp"
 
@@ -15,6 +16,9 @@
 /**@brief pieces/entities */
 #include "Piece.hpp"
 
+/**@brief commands */
+class IEntityCommand;
+class MoveTo;
 
 class EventHandler;
 
@@ -106,6 +110,8 @@ private: // Smooth stuff
     Stellar::KeyFrame m_BoardTopLeftKF;
     Stellar::KeyFrame m_PieceOpacityKF;
     Memento<Vec2i> m_BoardTopLeftMemento;
+private:
+    std::vector<Core::Ref<IEntityCommand>> m_EntityCommands;
 };
 
 #endif //!__BOARD_HPP__

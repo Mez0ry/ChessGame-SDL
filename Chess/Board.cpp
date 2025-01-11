@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include "EventHandler.hpp"
 
+#include "MoveTo.hpp"
+
 Board::Board(ObjectSize board_size) : m_TeamToMove(Team::WHITE)
 {
     m_BoardSize = board_size;
@@ -107,10 +109,8 @@ void Board::OnDestroy()
 
 void Board::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> event_handler)
 {
-    const auto& cursor_pos = MouseInput::GetMousePosition();
-
-    //@TODO  lerp from start_drag_pos to final_entity_pos
-   static Vec2i initial_drag_pos, target_entity_pos;
+   const auto& cursor_pos = MouseInput::GetMousePosition();
+   static Vec2i initial_drag_pos;
 
     if(MouseInput::GetMouseState(MouseState::MOUSE_BUTTON_DOWN)){
         if(MouseInput::IsPressed(SDL_BUTTON_LEFT)){
@@ -140,20 +140,20 @@ void Board::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> event_han
                     continue;
 
                 if(piece->IsDragging()){
+                    Vec2i curr_relative_pos = GetRelativePos((*this),move_to);
 
-                    if(IsMakeableMove(piece,move_to)){
-                        MakeMove(piece,move_to);
+                    SmoothMove smooth_move;
+                    smooth_move.move_from = initial_drag_pos;
+                    smooth_move.move_to = curr_relative_pos;
+                    smooth_move.board_move_to = move_to;
+                    smooth_move.frame_duration = 1.f;
+                    smooth_move.easing_type = Stellar::Easing::EaseInSine;
 
-                        Vec2i curr_relative_pos = GetRelativePos((*this),move_to);
-                        piece->ApplySmoothMove(initial_drag_pos,curr_relative_pos,move_to,1.f,Stellar::Easing::EaseInOutSine);
-                    }
-
+                    m_EntityCommands.push_back(Core::CreateRef<MoveTo>((*this),piece,smooth_move));
                     piece->StopDragging();
                 }
             }
         }
-
-
     }
 }
 
@@ -164,13 +164,10 @@ void Board::Update(float dt)
     if(m_BoardTopLeftKF.GetElapsedFrames() > 2.0f){
         m_PieceOpacityKF.Update(dt);
     }
-    
-    for(auto& piece : m_Pieces){
-        if(!piece || piece->IsKilled())
-            continue;
-        
-        piece->Update(dt);
-    }
+   
+    m_EntityCommands.erase(std::remove_if(m_EntityCommands.begin(),m_EntityCommands.end(),[&](Core::Ref<IEntityCommand> command){
+        return (command->Execute(dt));
+    }),m_EntityCommands.end());
 }
 
 void Board::Render(const Core::Ref<Renderer> renderer)
@@ -198,9 +195,6 @@ void Board::Render(const Core::Ref<Renderer> renderer)
 
     for(auto& piece : m_Pieces){
         if(piece && !piece->IsKilled()){
-            if(!piece->IsSmoothMoving()){
-                SetTextureEntityPosition(piece);
-            }
             piece->Render(renderer);
         }
     }
@@ -369,6 +363,5 @@ bool Board::IsMakeableMove(const Core::Ref<Piece> piece, Vec2i move_to)
 
 void Board::MakeMove(const Core::Ref<Piece> piece, Vec2i move)
 {
-    //piece->SetPosition(move);
-
+    piece->SetPosition(move);
 }
