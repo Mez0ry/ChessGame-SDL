@@ -16,8 +16,7 @@ class Renderer;
 class IEntity{
 public:
     virtual ~IEntity() {}
-
-    virtual void Update(float dt) = 0;
+    
     virtual void Render(const Core::Ref<Renderer> renderer) = 0;
     
     virtual void SetSize(ObjectSize size) = 0;
