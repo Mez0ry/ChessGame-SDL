@@ -224,13 +224,13 @@ void Navigation::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> even
 
   size_t tmp_idx = m_CurrTextIdx;
 
-  if(KeyboardInput::IsKeyUp(SDLK_DOWN)&& !m_BorderKeyFrame.IsFinished() && !m_TargetChanged){
+  if(KeyboardInput::IsKeyUp(SDLK_DOWN) && !m_BorderKeyFrame.IsFinished() && !m_TargetChanged){
     tmp_idx += 1;
     if(tmp_idx >= m_TextVec.size()){
       tmp_idx = 0;
     }
     SetTextIdx(tmp_idx);
-  }else if(KeyboardInput::IsKeyUp(SDLK_UP)&& !m_BorderKeyFrame.IsFinished() && !m_TargetChanged){
+  }else if(KeyboardInput::IsKeyUp(SDLK_UP) && !m_BorderKeyFrame.IsFinished() && !m_TargetChanged){
     tmp_idx -= 1;
     tmp_idx = std::clamp(tmp_idx, size_t(0), m_TextVec.size() - 1);
     SetTextIdx(tmp_idx);
