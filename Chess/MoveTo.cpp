@@ -3,13 +3,19 @@
 
 MoveTo::MoveTo(Board &board, Core::Ref<Piece> piece, const SmoothMove &smooth_move) : m_Board(board),m_Piece(piece), m_SmoothMove(smooth_move)
 {
-
+    //board.GeneratePossibleMoves(piece);
 }
 
-bool MoveTo::Execute(std::optional<float> dt)
+CommandStatus MoveTo::Execute(std::optional<float> dt)
 {
-    if(!m_Board.IsMakeableMove(m_Piece,m_SmoothMove.board_move_to))
-        return false;
+    m_Board.ForEachPiece([&](const Core::Ref<Piece> piece){
+        m_Board.GenerateLegalMoves(piece);
+    });
+
+    if(!m_Board.IsMakeableMove(m_Piece,m_SmoothMove.board_move_to)){
+        m_Board.SetTextureEntityPosition(m_Piece);
+        return CommandStatus::FAILED;
+    }
     
     auto& keyframe = m_SmoothMove.keyframe;
 
@@ -30,8 +36,10 @@ bool MoveTo::Execute(std::optional<float> dt)
     
     if(keyframe.IsFinished()){
         m_Board.MakeMove(m_Piece,m_SmoothMove.board_move_to);
+
         m_Board.SetTextureEntityPosition(m_Piece);
-        return true;
+        m_Board.GenerateLegalMoves(m_Piece);
+        return CommandStatus::SUCCESS;
     }
-    return false;
+    return CommandStatus::WAITING;
 }

@@ -11,15 +11,9 @@
 
 #include "MoveTo.hpp"
 
-Board::Board(ObjectSize board_size) : m_TeamToMove(Team::WHITE)
+Board::Board(const Core::Ref<Renderer> renderer,const Core::Ref<Window> window) : m_TeamToMove(Team::WHITE), m_Renderer(renderer),m_Window(window)
 {
-    m_BoardSize = board_size;
-}
 
-
-Board::Board(const Core::Ref<Renderer> renderer,const Core::Ref<Window> window,const std::string& path,ObjectSize one_square_src_size, ObjectSize board_size) : m_TeamToMove(Team::WHITE), m_Renderer(renderer), m_Window(window), m_BoardSize(board_size)
-{
-    Setup(renderer,window,path,one_square_src_size);
 }
 
 Board::~Board()
@@ -27,18 +21,22 @@ Board::~Board()
     
 }
 
-void Board::Setup(const Core::Ref<Renderer> renderer,const Core::Ref<Window> window,const std::string& path,ObjectSize one_square_src_size)
+void Board::Setup(ObjectSize board_size,Core::Ref<IChessModes> chess_mode,const std::string& board_path,ObjectSize one_square_src_size)
 {
-    auto[win_w,win_h] = window->GetWindowSize();
+    m_BoardSize = board_size;
+    m_pChessMode = chess_mode;
+    m_pFenNotation = chess_mode->GetFenStrategy();
+
+    auto[win_w,win_h] = m_Window->GetWindowSize();
 
     m_OneSquareSizeSrc = one_square_src_size;
     m_EntityAdjustedSize = ObjectSize(m_OneSquareSizeSrc.GetWidth() * 0.8f, m_OneSquareSizeSrc.GetHeight() * 0.8f);
     
-    m_WhiteSquareTexture.LoadTexture(renderer,path);
+    m_WhiteSquareTexture.LoadTexture(m_Renderer,board_path);
 
     m_WhiteSquareTexture.SetRect<SourceRect>({0,0},one_square_src_size);
-
-    m_BlackSquareTexture.LoadTexture(renderer,path);
+    
+    m_BlackSquareTexture.LoadTexture(m_Renderer,board_path);
     m_BlackSquareTexture.SetRect<SourceRect>({one_square_src_size.GetWidth(),0},one_square_src_size);
     m_BlackSquareTexture.SetSize(one_square_src_size);
     
@@ -56,15 +54,21 @@ void Board::Setup(const Core::Ref<Renderer> renderer,const Core::Ref<Window> win
         }
     });
 
-    OnResize(window);
+    m_pFenNotation->SetupStartingBoardPos((*this));
+    SetupPieceTextures();
+
+    OnResize(m_Window);
 
     m_BoardTopLeft.x = m_BoardTopLeftMemento.GetState().x;
     m_BoardTopLeft.y = -m_FullBoardSize.GetHeight();
+
 }
 
 void Board::OnCreate()
 {
-    
+    for(auto& piece : m_Pieces){
+        this->GenerateLegalMoves(piece);
+    }
 }
 
 void Board::OnResize([[maybe_unused]] const Core::Ref<Window> window)
@@ -166,7 +170,9 @@ void Board::Update(float dt)
     }
    
     m_EntityCommands.erase(std::remove_if(m_EntityCommands.begin(),m_EntityCommands.end(),[&](Core::Ref<IEntityCommand> command){
-        return (command->Execute(dt));
+        CommandStatus status = command->Execute(dt);
+
+        return (status == CommandStatus::FAILED || status == CommandStatus::SUCCESS);
     }),m_EntityCommands.end());
 }
 
@@ -195,6 +201,9 @@ void Board::Render(const Core::Ref<Renderer> renderer)
 
     for(auto& piece : m_Pieces){
         if(piece && !piece->IsKilled()){
+            if(m_BoardTopLeftKF.GetElapsedFrames() > 0.7f && !m_BoardTopLeftKF.IsFinished()){
+                SetTextureEntityPosition(piece);
+            }
             piece->Render(renderer);
         }
     }
@@ -216,78 +225,20 @@ ObjectSize Board::GetOneSquareSize() const
     return m_OneSquareSize;
 }
 
-bool Board::EntityIsOutOfBorder(const Core::Ref<IEntity> entity) const
+bool Board::IsOnBoard(const Core::Ref<IEntity> &entity) const
 {
-   const auto& entity_pos = entity->GetPosition();
-   auto brd_tl_state = m_BoardTopLeftMemento.GetState();
-
-   Rect rect(brd_tl_state,m_FullBoardSize);
-   
-   return (AABB::PointIsOnObject(entity_pos,rect));
+    const auto& entity_pos = entity->GetPosition();
+    return (IsOnBoard(entity_pos));
 }
 
-//"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-void Board::LoadBoardFromFen(const char* fen)
-{  
-    Vec2i new_pos;
-    new_pos.x = 0;
-    new_pos.y = m_BoardSize.GetHeight() - 1;
-
-    char row_symbol = '/';
-    int read_idx = 0;
-
-    std::unordered_map<Core::Ref<Piece>,char> handled_pieces;
-
-    auto is_piece_symbol = [&](char symbol) -> bool{
-        auto it = m_cPiecesMap.find(symbol);
-        return (it != m_cPiecesMap.end());
-    };
-    
-    size_t space_cnt = 0;
-    for(int i = 0; i < strlen(fen);++i){
-        if(fen[i] == ' '){
-            ++space_cnt;
-        }
-
-        auto requirement = [&](const Core::Ref<Piece> piece) -> bool{
-            auto piece_type = piece->GetPieceType();
-            auto team = piece->GetTeam();
-
-            char piece_type_symbol = (team == Team::WHITE) ? toupper(static_cast<char>(piece->GetPieceType()) ) : static_cast<char>(piece->GetPieceType()) ;
-            return (fen[i] == piece_type_symbol && handled_pieces.count(piece) == 0);
-        };
-
-
-        auto founded_piece = FindPiece(requirement);
-
-        if(std::isdigit(fen[i])){
-            int digit = std::atoi(&fen[i]);
-            new_pos.x += digit;
-        }else if(fen[i] == '/'){
-            new_pos.x = 0;
-            --new_pos.y;
-        }else if(founded_piece && space_cnt < 1){
-            founded_piece->SetPosition(new_pos);
-            ++new_pos.x;
-            
-            founded_piece->Revive();
-            handled_pieces.insert(std::make_pair(founded_piece,fen[i]));
-        }
-
-    }
- 
-}
-
-std::string Board::GenerateBoardFen()
+bool Board::IsOnBoard(const Vec2i& pos) const
 {
-    std::string fen_res;
-
-    return fen_res;
+   return (pos.y < m_BoardSize.GetHeight() && pos.x < m_BoardSize.GetWidth() && pos.y > -1 && pos.x > -1);
 }
 
 void Board::SetTextureEntityPosition(const Core::Ref<IEntity> &entity)
 {
-    if(!entity || EntityIsOutOfBorder(entity)){
+    if(!entity || !IsOnBoard(entity)){
         return;
     }
 
@@ -310,6 +261,11 @@ void Board::RemovePiece(const Core::Ref<Piece> piece) {
     }),m_Pieces.end());
 }
 
+std::vector<Core::Ref<Piece>> &Board::GetPieces()
+{
+    return m_Pieces;
+}
+
 void Board::KillPieceAt(const Vec2i& square) {
     auto piece = FindPiece([&](const Core::Ref<Piece> piece){
         return (piece->GetPosition() == square);
@@ -325,6 +281,22 @@ Core::Ref<Piece> Board::FindPiece(const std::function<bool(const Core::Ref<Piece
 {
     auto it = std::find_if(m_Pieces.begin(),m_Pieces.end(),pred);
     return (it != m_Pieces.end() ? (*it) : nullptr);
+}
+
+bool Board::SquareIsOccupiedByEnemy(const Vec2i &square_pos, Team curr_team)
+{
+    Team enemy_team = (curr_team == Team::BLACK) ? Team::WHITE : Team::BLACK;
+
+    return (FindPiece([&](const Core::Ref<Piece> img_piece){
+                return (img_piece->GetPosition() == square_pos && img_piece->GetTeam() == enemy_team);
+            }) != nullptr);
+}
+
+bool Board::SquareIsOccupied(const Vec2i &square_pos) const
+{
+   return (FindPiece([&](const Core::Ref<Piece> piece) -> bool{
+        return (piece->GetPosition() == square_pos);
+    })) != nullptr;
 }
 
 Vec2i Board::GetRelativePos(Board &board, const Vec2i &board_pos)
@@ -356,12 +328,317 @@ Vec2i Board::GetRelativePos(Board &board, const Core::Ref<IEntity> entity)
     return relative_ent_pos;
 }
 
-bool Board::IsMakeableMove(const Core::Ref<Piece> piece, Vec2i move_to)
+void Board::GenerateLegalMoves(const Core::Ref<Piece> piece) {
+    PieceType piece_type = piece->GetPieceType();
+    Team piece_team = piece->GetTeam();
+    std::vector<Vec2i>& piece_legal_moves = piece->GetLegalMoves();
+    Vec2i piece_pos = piece->GetPosition();
+
+    Team enemy_team = (piece_team == Team::BLACK) ? Team::WHITE : Team::BLACK;
+
+    if(!piece_legal_moves.empty()){
+        piece_legal_moves.clear();
+    }
+
+    switch(piece_type){
+        case PieceType::PAWN:{
+            uint8_t seventh_rank = m_BoardSize.GetHeight() - 2;
+            uint8_t first_rank = 1;
+
+            Vec2i move_forward = {piece_pos.x, (piece_team == Team::BLACK) ? piece_pos.y - 1 : piece_pos.y + 1 };
+            bool forward_square_is_occupied = SquareIsOccupied(move_forward);
+
+            if(!forward_square_is_occupied){
+                piece_legal_moves.push_back(move_forward);
+            }
+
+            if(piece_pos.y == seventh_rank  || piece_pos.y == first_rank || !forward_square_is_occupied){
+                Vec2i special_first_move = {piece_pos.x, (piece_team == Team::BLACK) ? piece_pos.y - 2 : piece_pos.y + 2 };
+                if(!SquareIsOccupied(special_first_move))
+                    piece_legal_moves.push_back({piece_pos.x, (piece_team == Team::BLACK) ? piece_pos.y - 2 : piece_pos.y + 2 });
+            }
+            
+            
+            Vec2i tl_square{piece_pos.x - 1,(piece_team == Team::BLACK) ? piece_pos.y - 1 : piece_pos.y + 1},
+                  tr_square{piece_pos.x + 1, (piece_team == Team::BLACK) ? piece_pos.y - 1 : piece_pos.y + 1};
+            
+            bool tl_is_occupied_by_enemy = SquareIsOccupiedByEnemy(tl_square,piece_team);
+            bool tr_is_occupied_by_enemy = SquareIsOccupiedByEnemy(tr_square,piece_team);
+
+            if(tl_is_occupied_by_enemy){
+                piece_legal_moves.push_back(tl_square);
+            }
+            
+            if(tr_is_occupied_by_enemy){
+                piece_legal_moves.push_back(tr_square);
+            }
+
+            //@TODO ENPASSANT
+            break;
+        }
+
+        case PieceType::ROOK:{
+            GenerateRookLegalMoves(piece);
+            break;
+        }
+
+        case PieceType::BISHOP:{
+            GenerateBishopLegalMoves(piece);
+            break;
+        }
+
+        case PieceType::KNIGHT:{
+           std::array<Vec2i,8> unchecked_knight_pos = {Vec2i(piece_pos.x - 2, piece_pos.y + 1),
+                                                        Vec2i(piece_pos.x - 2, piece_pos.y - 1),
+                                                        Vec2i(piece_pos.x + 2, piece_pos.y + 1),
+                                                        Vec2i(piece_pos.x + 2, piece_pos.y - 1),
+                                                        Vec2i(piece_pos.x - 1, piece_pos.y + 2),
+                                                        Vec2i(piece_pos.x + 1, piece_pos.y + 2),
+                                                        Vec2i(piece_pos.x - 1, piece_pos.y - 2),
+                                                        Vec2i(piece_pos.x + 1, piece_pos.y - 2),
+                                                       };
+
+            for(auto& possible_pos : unchecked_knight_pos){
+                if(IsOnBoard(possible_pos)){
+                    if(SquareIsOccupiedByEnemy(possible_pos,piece_team)){
+                        //@todo add ptr on attacked piece or smth like
+                    }
+                    piece_legal_moves.push_back(possible_pos);
+                }
+            }
+            break;
+        }
+        case PieceType::QUEEN:{
+            
+            GenerateRookLegalMoves(piece);
+            GenerateBishopLegalMoves(piece);
+            break;
+        }
+
+        case PieceType::KING:{
+
+            break;
+        }
+    }//!switch
+}
+
+void Board::GenerateRookLegalMoves(const Core::Ref<Piece> piece) {
+    PieceType piece_type = piece->GetPieceType();
+    Team piece_team = piece->GetTeam();
+    std::vector<Vec2i>& piece_legal_moves = piece->GetLegalMoves();
+    Vec2i piece_pos = piece->GetPosition();
+
+    Team enemy_team = (piece_team == Team::BLACK) ? Team::WHITE : Team::BLACK;
+
+    constexpr uint8_t mask[4] = {
+        1 << 0,
+        1 << 1,
+        1 << 2,
+        1 << 3
+    };
+
+    Vec2i moves_left = {piece_pos.x - 1,piece_pos.y}, // mask[0]
+          moves_right = {piece_pos.x + 1,piece_pos.y}, // mask[1]
+          moves_up = {piece_pos.x, piece_pos.y - 1}, // mask[2]
+          moves_down = {piece_pos.x, piece_pos.y + 1}; // mask[3]
+
+    uint8_t flags = 0;
+
+    for(;((flags ^ (mask[0] | mask[1] | mask[2] | mask[3])) != 0); moves_left.x -= 1, moves_right.x += 1, moves_up.y -= 1, moves_down.y += 1){
+        
+        if(!IsOnBoard(moves_left)){
+            flags |= mask[0];
+        }else if(SquareIsOccupiedByEnemy(moves_left,piece_team) && (flags & mask[0]) == 0){
+
+            flags |= mask[0];
+        }else{
+            if((flags & mask[0]) == 0){
+                piece_legal_moves.push_back(moves_left);
+            }
+        }
+
+        if(!IsOnBoard(moves_right)){
+            flags |= mask[1];
+        }else if(SquareIsOccupiedByEnemy(moves_right,piece_team) && (flags & mask[1]) == 0){
+            flags |= mask[1];
+        }
+        else{
+            if((flags & mask[1]) == 0){
+                piece_legal_moves.push_back(moves_right);
+            }
+        }
+
+        if(!IsOnBoard(moves_up)){
+            flags |= mask[2];
+        }else if(SquareIsOccupiedByEnemy(moves_up,piece_team) && (flags & mask[2]) == 0){
+            flags |= mask[2];
+        }
+        else{
+            if((flags & mask[2]) == 0){
+                piece_legal_moves.push_back(moves_up);
+            }
+        }
+
+        if(!IsOnBoard(moves_down)){
+            flags |= mask[3];
+        }else if(SquareIsOccupiedByEnemy(moves_down,piece_team) && (flags & mask[3]) == 0){
+            flags |= mask[3];
+        }
+        else{
+            if((flags & mask[3]) == 0){
+                piece_legal_moves.push_back(moves_down);
+            }
+        }
+    }
+    
+}
+
+void Board::GenerateBishopLegalMoves(const Core::Ref<Piece> piece) {
+     PieceType piece_type = piece->GetPieceType();
+    Team piece_team = piece->GetTeam();
+    std::vector<Vec2i>& piece_legal_moves = piece->GetLegalMoves();
+    Vec2i piece_pos = piece->GetPosition();
+
+    Team enemy_team = (piece_team == Team::BLACK) ? Team::WHITE : Team::BLACK;
+
+    constexpr uint8_t mask[4] = {
+        1 << 0,
+        1 << 1,
+        1 << 2,
+        1 << 3
+    };
+
+    Vec2i moves_tl = {piece_pos.x - 1,piece_pos.y - 1}, // mask[0]
+        moves_tr = {piece_pos.x + 1,piece_pos.y - 1}, // mask[1]
+        moves_bl = {piece_pos.x - 1, piece_pos.y + 1}, // mask[2]
+        moves_br = {piece_pos.x + 1, piece_pos.y + 1}; // mask[3]
+
+    uint8_t flags = 0;
+
+    Vec2i towards_tl_dir = (moves_tl - piece_pos),
+        towards_tr_dir = (moves_tr - piece_pos),
+        towards_bl_dir = (moves_bl - piece_pos),
+        towards_br_dir = (moves_br - piece_pos);
+
+    for(;((flags ^ (mask[0] | mask[1] | mask[2] | mask[3])) != 0); moves_tl += towards_tl_dir, moves_tr += towards_tr_dir,moves_bl += towards_bl_dir,moves_br += towards_br_dir){
+        if(!IsOnBoard(moves_tl)){
+            flags |= mask[0];
+        }else if(SquareIsOccupiedByEnemy(moves_tl,piece_team) && (flags & mask[0]) == 0){
+
+            flags |= mask[0];
+        }else{
+            if((flags & mask[0]) == 0){
+                piece_legal_moves.push_back(moves_tl);
+            }
+        }
+
+        if(!IsOnBoard(moves_tr)){
+            flags |= mask[1];
+        }else if(SquareIsOccupiedByEnemy(moves_tr,piece_team) && (flags & mask[1]) == 0){
+            flags |= mask[1];
+        }
+        else{
+            if((flags & mask[1]) == 0){
+                piece_legal_moves.push_back(moves_tr);
+            }
+        }
+
+        if(!IsOnBoard(moves_bl)){
+            flags |= mask[2];
+        }else if(SquareIsOccupiedByEnemy(moves_bl,piece_team) && (flags & mask[2]) == 0){
+            flags |= mask[2];
+        }
+        else{
+            if((flags & mask[2]) == 0){
+                piece_legal_moves.push_back(moves_bl);
+            }
+        }
+
+        if(!IsOnBoard(moves_br)){
+            flags |= mask[3];
+        }else if(SquareIsOccupiedByEnemy(moves_br,piece_team) && (flags & mask[3]) == 0){
+            flags |= mask[3];
+        }
+        else{
+            if((flags & mask[3]) == 0){
+                piece_legal_moves.push_back(moves_br);
+            }
+        }
+    }
+
+}
+
+void Board::ForEachPiece(const std::function<void(const Core::Ref<Piece>)> &callback)
 {
-    return true;
+    for(auto& piece : m_Pieces){
+        callback(piece);
+    }
+}
+
+bool Board::IsMakeableMove(const Core::Ref<Piece> piece, Vec2i move_to) {
+  return (IsOnBoard(move_to) && piece->IsLegalMove(move_to));
 }
 
 void Board::MakeMove(const Core::Ref<Piece> piece, Vec2i move)
 {
     piece->SetPosition(move);
+}
+
+void Board::SetupPieceTextures() {
+    const std::string resource_pawn_name = "piece1.png";
+    const std::string resources_knight_name = "piece2.png";
+    const std::string resources_bishop_name = "piece3.png";
+    const std::string resources_queen_name = "piece4.png";
+    const std::string resources_king_name = "piece5.png";
+    const std::string resources_rook_name = "piece6.png";
+    
+    const std::string black_pieces_path_dir = "resources/game/pieces/b/b_";
+    const std::string white_pieces_path_dir = "resources/game/pieces/w/w_";
+
+    const std::string b_pawn_texture_path = black_pieces_path_dir + resource_pawn_name;
+    const std::string b_rook_texture_path = black_pieces_path_dir + resources_rook_name;
+    const std::string b_bishop_texture_path = black_pieces_path_dir + resources_bishop_name;
+    const std::string b_knight_texture_path = black_pieces_path_dir + resources_knight_name;
+    const std::string b_queen_texture_path = black_pieces_path_dir + resources_queen_name;
+    const std::string b_king_texture_path = black_pieces_path_dir + resources_king_name;
+
+    const std::string w_pawn_texture_path = white_pieces_path_dir + resource_pawn_name;
+    const std::string w_rook_texture_path = white_pieces_path_dir + resources_rook_name;
+    const std::string w_bishop_texture_path = white_pieces_path_dir + resources_bishop_name;
+    const std::string w_knight_texture_path = white_pieces_path_dir + resources_knight_name;
+    const std::string w_queen_texture_path = white_pieces_path_dir + resources_queen_name;
+    const std::string w_king_texture_path = white_pieces_path_dir + resources_king_name;
+
+    std::array<Piece,12> pieces_array = {Piece(m_Renderer,b_pawn_texture_path,PieceType::PAWN,Team::BLACK),
+                                         Piece(m_Renderer,b_rook_texture_path,PieceType::ROOK,Team::BLACK),
+                                         Piece(m_Renderer,b_bishop_texture_path,PieceType::BISHOP,Team::BLACK),
+                                         Piece(m_Renderer,b_knight_texture_path,PieceType::KNIGHT,Team::BLACK),
+                                         Piece(m_Renderer,b_queen_texture_path,PieceType::QUEEN,Team::BLACK),
+                                         Piece(m_Renderer,b_king_texture_path,PieceType::KING,Team::BLACK),
+
+                                         Piece(m_Renderer,w_pawn_texture_path,PieceType::PAWN,Team::WHITE),
+                                         Piece(m_Renderer,w_rook_texture_path,PieceType::ROOK,Team::WHITE),
+                                         Piece(m_Renderer,w_bishop_texture_path,PieceType::BISHOP,Team::WHITE),
+                                         Piece(m_Renderer,w_knight_texture_path,PieceType::KNIGHT,Team::WHITE),
+                                         Piece(m_Renderer,w_queen_texture_path,PieceType::QUEEN,Team::WHITE),
+                                         Piece(m_Renderer,w_king_texture_path,PieceType::KING,Team::WHITE)
+                                        };
+    
+    for(auto& piece : pieces_array){
+        SDL_SetTextureAlphaMod(piece.GetTexture(),0);
+    }
+    
+    for(auto& piece : m_Pieces){
+        if(!piece) continue;
+        auto& piece_texture = piece->GetTexture();
+
+        auto it = std::find_if(pieces_array.begin(),pieces_array.end(),[&](const Piece& img_piece){
+            return (*piece == img_piece);
+        });
+
+        if(it != pieces_array.end()){
+            piece_texture.ShareSDLTexture((*it).GetTexture());
+        }
+        
+    }
 }

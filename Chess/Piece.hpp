@@ -1,13 +1,13 @@
 #ifndef __PIECE_HPP__
 #define __PIECE_HPP__
+#include <vector>
+
 #include "IEntity.hpp"
 #include "KeyFrame.hpp"
 #include "Easing.hpp"
-#include <stack>
+#include "Move.hpp"
 
-enum class PieceType : char{
-    PAWN = 'p',ROOK = 'r',KNIGHT = 'n',BISHOP = 'b',QUEEN = 'q',KING = 'k' // for white team letters should be in uppercase
-};
+#include "PieceType.hpp"
 
 enum class Team : char{
  WHITE = 'w', BLACK = 'b'
@@ -19,7 +19,7 @@ private:
 public:
     Piece(PieceType piece_type, Team team);
 
-    Piece(const Core::Ref<Renderer> renderer, const char* texture_path, PieceType piece_type);
+    Piece(const Core::Ref<Renderer> renderer, const std::string& texture_path,PieceType piece_type, Team team);
     Piece(Texture& texture, PieceType piece_type,Team team);
     ~Piece();
     
@@ -54,6 +54,14 @@ public:
     void StopDragging();
 
     bool IsDragging() const;
+
+    std::vector<Vec2i>& GetLegalMoves();
+    bool IsLegalMove(const Vec2i& square) const;
+    
+    bool operator==(const Piece& other) const{
+        return (m_Team == other.m_Team && m_PieceType == other.m_PieceType);
+    }
+    
 private:
     drag_texture_t m_Texture;
     Vec2i m_Position, m_PrevPos; // Pos on the board
@@ -61,6 +69,8 @@ private:
     PieceType m_PieceType;
     Team m_Team;
     bool m_IsKilled,m_ToMove;
+private:
+    std::vector<Vec2i> m_LegalMoves;
 };
 
 #endif //!__PIECE_HPP__

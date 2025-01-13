@@ -2,12 +2,16 @@
 #define __ENTITY_COMMAND_HPP__
 #include "IEntity.hpp"
 #include <optional>
+
+enum class CommandStatus{
+    FAILED,SUCCESS,WAITING
+};
 class IEntityCommand
 {
 public:
     virtual ~IEntityCommand() {}
 
-    virtual bool Execute(std::optional<float> dt) = 0;
+    virtual CommandStatus Execute(std::optional<float> dt) = 0;
 };
 
 #endif //! __ENTITY_COMMAND_HPP__

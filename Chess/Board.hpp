@@ -4,6 +4,10 @@
 #include <functional>
 #include <unordered_map>
 #include <queue>
+#include <array>
+
+#include "FenNotations.hpp"
+#include "ChessModes.hpp"
 
 #include "ObjectSize.hpp"
 
@@ -29,11 +33,10 @@ private:
     Core::Ref<Renderer> m_Renderer;
     Core::Ref<Window> m_Window;
 public:
-    Board(ObjectSize board_size);
-    Board(const Core::Ref<Renderer> renderer,const Core::Ref<Window> window,const std::string& path,ObjectSize one_square_src_size, ObjectSize board_size);
+    Board(const Core::Ref<Renderer> renderer,const Core::Ref<Window> window);
     ~Board();
 
-    void Setup(const Core::Ref<Renderer> renderer,const Core::Ref<Window> window,const std::string& path,ObjectSize one_square_src_size);
+    void Setup(ObjectSize board_size,Core::Ref<IChessModes> chess_mode,const std::string& board_path,ObjectSize one_square_src_size);
 
     void OnCreate();
     void OnResize([[maybe_unused]] const Core::Ref<Window> window);
@@ -53,12 +56,11 @@ public:
     ObjectSize GetOneSquareSize() const;
 
 public:
-    
-    bool EntityIsOutOfBorder( const Core::Ref<IEntity> entity) const;
+    bool IsOnBoard( const Core::Ref<IEntity>& entity) const;
+    bool IsOnBoard( const Vec2i& pos) const;
 
     void LoadBoardFromFen(const char* fen);
-    std::string GenerateBoardFen();
-
+    
     void SetTextureEntityPosition(const Core::Ref<IEntity>& entity);
 public:
 /**
@@ -69,6 +71,8 @@ public:
  * @brief removes piece from the board
 */
     void RemovePiece(const Core::Ref<Piece> piece);
+
+    std::vector<Core::Ref<Piece>>& GetPieces();
 
 /**
  * @brief kills the Piece
@@ -82,23 +86,30 @@ public:
 */
     Core::Ref<Piece> FindPiece(const std::function<bool(const Core::Ref<Piece>)>& pred) const;
 
+    bool SquareIsOccupiedByEnemy(const Vec2i& square_pos, Team curr_team);
+
+    bool SquareIsOccupied(const Vec2i& square_pos) const;
+
     static Vec2i GetRelativePos(Board &board, const Vec2i& board_pos);
     
     static Vec2i GetRelativePos(Board& board,const Core::Ref<IEntity> entity);
 
 public:
+    void GenerateLegalMoves(const Core::Ref<Piece> piece);
+    void GenerateRookLegalMoves(const Core::Ref<Piece> piece);
+    void GenerateBishopLegalMoves(const Core::Ref<Piece> piece);
+
+    void ForEachPiece(const std::function<void(const Core::Ref<Piece>)>& callback);
+
     bool IsMakeableMove(const Core::Ref<Piece> piece,Vec2i move_to);
     void MakeMove(const Core::Ref<Piece> piece, Vec2i move);
+private:
+    void SetupPieceTextures();
 
 private:
     std::vector<Core::Ref<Piece>> m_Pieces;
+    std::vector<Core::Ref<IEntityCommand>> m_EntityCommands;
     Team m_TeamToMove;
-    const std::unordered_map<char,PieceType> m_cPiecesMap = {{'p',PieceType::PAWN},
-                                                             {'r', PieceType::ROOK},
-                                                             {'n', PieceType::KNIGHT},
-                                                             {'b',PieceType::BISHOP},
-                                                             {'q',PieceType::QUEEN},
-                                                             {'k',PieceType::KING}};
 private:
     Texture m_WhiteSquareTexture, m_BlackSquareTexture;
     ObjectSize m_BoardSize; // squares size
@@ -111,7 +122,9 @@ private: // Smooth stuff
     Stellar::KeyFrame m_PieceOpacityKF;
     Memento<Vec2i> m_BoardTopLeftMemento;
 private:
-    std::vector<Core::Ref<IEntityCommand>> m_EntityCommands;
+    Core::Ref<IChessModes> m_pChessMode;
+    Core::Ref<IFenNotation> m_pFenNotation;
+private:
 };
 
 #endif //!__BOARD_HPP__

@@ -14,6 +14,7 @@ struct SmoothMove{
     float frame_duration;
     Stellar::KeyFrame keyframe;
 };
+
 /**
  * @brief makes move relative to board
  */
@@ -25,6 +26,6 @@ private:
     SmoothMove m_SmoothMove;
 public:
     MoveTo(Board &board, Core::Ref<Piece> piece,const SmoothMove& smooth_move);
-    bool Execute(std::optional<float> dt) override;
+    CommandStatus Execute(std::optional<float> dt) override;
 };
 #endif //!__MOVE_TO_COMMAND_HPP__
