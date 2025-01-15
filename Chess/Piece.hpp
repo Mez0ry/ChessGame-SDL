@@ -57,11 +57,40 @@ public:
 
     std::vector<Vec2i>& GetLegalMoves();
     bool IsLegalMove(const Vec2i& square) const;
-    
+
+    std::vector<Vec2i>& GetCaptureMoves();
+    bool IsCaptureMove(const Vec2i& square) const;
+
+public:
     bool operator==(const Piece& other) const{
         return (m_Team == other.m_Team && m_PieceType == other.m_PieceType);
     }
     
+    bool operator==(const Team& team) const{
+        return (m_Team == team);
+    }
+
+    friend bool operator==(const Core::Ref<Piece> piece,const Team& team){
+        if(!piece){
+            STELLAR_CRITICAL("Piece was nullptr");
+            return false;
+        }
+
+        return (piece->GetTeam() == team);
+    }
+
+    bool operator!=(const Piece& other) const{
+        return !((*this) == other);
+    }
+
+    bool operator!=(const Team& team) const{
+        return (m_Team != team);
+    }
+
+    friend bool operator!=(const Core::Ref<Piece> piece,const Team& team){
+        return !(piece == team);
+    }
+
 private:
     drag_texture_t m_Texture;
     Vec2i m_Position, m_PrevPos; // Pos on the board
@@ -71,6 +100,7 @@ private:
     bool m_IsKilled,m_ToMove;
 private:
     std::vector<Vec2i> m_LegalMoves;
+    std::vector<Vec2i> m_CaptureMoves;
 };
 
 #endif //!__PIECE_HPP__

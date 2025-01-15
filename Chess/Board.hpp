@@ -58,8 +58,6 @@ public:
 public:
     bool IsOnBoard( const Core::Ref<IEntity>& entity) const;
     bool IsOnBoard( const Vec2i& pos) const;
-
-    void LoadBoardFromFen(const char* fen);
     
     void SetTextureEntityPosition(const Core::Ref<IEntity>& entity);
 public:
@@ -85,6 +83,11 @@ public:
  * @param pred predicate to be used in 'find' algo
 */
     Core::Ref<Piece> FindPiece(const std::function<bool(const Core::Ref<Piece>)>& pred) const;
+    /**
+     * @brief Gets the piece from certain square if its there
+     * @returns piece otherwise nullptr
+     */
+    Core::Ref<Piece> GetPieceAt(const Vec2i& square);
 
     bool SquareIsOccupiedByEnemy(const Vec2i& square_pos, Team curr_team);
 
@@ -99,13 +102,12 @@ public:
     void GenerateRookLegalMoves(const Core::Ref<Piece> piece);
     void GenerateBishopLegalMoves(const Core::Ref<Piece> piece);
 
-    void ForEachPiece(const std::function<void(const Core::Ref<Piece>)>& callback);
+    void ForEachAlivePiece(const std::function<void(const Core::Ref<Piece>)>& callback);
 
     bool IsMakeableMove(const Core::Ref<Piece> piece,Vec2i move_to);
     void MakeMove(const Core::Ref<Piece> piece, Vec2i move);
 private:
     void SetupPieceTextures();
-
 private:
     std::vector<Core::Ref<Piece>> m_Pieces;
     std::vector<Core::Ref<IEntityCommand>> m_EntityCommands;

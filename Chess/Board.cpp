@@ -54,7 +54,7 @@ void Board::Setup(ObjectSize board_size,Core::Ref<IChessModes> chess_mode,const 
         }
     });
 
-    m_pFenNotation->SetupStartingBoardPos((*this));
+    m_pFenNotation->SetupCustomBoardPosition("8/2p3p1/8/3B1p2/3N4/1p6/8/2R3Q1 w - - 0 1",*this);
     SetupPieceTextures();
 
     OnResize(m_Window);
@@ -146,11 +146,20 @@ void Board::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> event_han
                 if(piece->IsDragging()){
                     Vec2i curr_relative_pos = GetRelativePos((*this),move_to);
 
-                    SmoothMove smooth_move;
+                    Move smooth_move;
+                    smooth_move.piece_to_move = piece;
                     smooth_move.move_from = initial_drag_pos;
                     smooth_move.move_to = curr_relative_pos;
+
                     smooth_move.board_move_to = move_to;
+                    
+                    auto piece_at = GetPieceAt(move_to);
+                    if(piece_at && piece_at != piece->GetTeam()){
+                        smooth_move.piece_to_kill = piece_at;
+                    }
+
                     smooth_move.frame_duration = 1.f;
+
                     smooth_move.easing_type = Stellar::Easing::EaseInSine;
 
                     m_EntityCommands.push_back(Core::CreateRef<MoveTo>((*this),piece,smooth_move));
@@ -200,7 +209,7 @@ void Board::Render(const Core::Ref<Renderer> renderer)
     }
 
     for(auto& piece : m_Pieces){
-        if(piece && !piece->IsKilled()){
+        if(IsOnBoard(piece) && piece && !piece->IsKilled()){
             if(m_BoardTopLeftKF.GetElapsedFrames() > 0.7f && !m_BoardTopLeftKF.IsFinished()){
                 SetTextureEntityPosition(piece);
             }
@@ -283,6 +292,13 @@ Core::Ref<Piece> Board::FindPiece(const std::function<bool(const Core::Ref<Piece
     return (it != m_Pieces.end() ? (*it) : nullptr);
 }
 
+Core::Ref<Piece> Board::GetPieceAt(const Vec2i &square)
+{
+    return FindPiece([&](const Core::Ref<Piece> piece){
+        return (piece->GetPosition() == square);
+    });
+}
+
 bool Board::SquareIsOccupiedByEnemy(const Vec2i &square_pos, Team curr_team)
 {
     Team enemy_team = (curr_team == Team::BLACK) ? Team::WHITE : Team::BLACK;
@@ -332,12 +348,17 @@ void Board::GenerateLegalMoves(const Core::Ref<Piece> piece) {
     PieceType piece_type = piece->GetPieceType();
     Team piece_team = piece->GetTeam();
     std::vector<Vec2i>& piece_legal_moves = piece->GetLegalMoves();
+    std::vector<Vec2i>& piece_capture_moves = piece->GetCaptureMoves();
+
     Vec2i piece_pos = piece->GetPosition();
 
     Team enemy_team = (piece_team == Team::BLACK) ? Team::WHITE : Team::BLACK;
 
     if(!piece_legal_moves.empty()){
         piece_legal_moves.clear();
+    }
+    if(!piece_capture_moves.empty()){
+        piece_capture_moves.clear();
     }
 
     switch(piece_type){
@@ -362,15 +383,17 @@ void Board::GenerateLegalMoves(const Core::Ref<Piece> piece) {
             Vec2i tl_square{piece_pos.x - 1,(piece_team == Team::BLACK) ? piece_pos.y - 1 : piece_pos.y + 1},
                   tr_square{piece_pos.x + 1, (piece_team == Team::BLACK) ? piece_pos.y - 1 : piece_pos.y + 1};
             
-            bool tl_is_occupied_by_enemy = SquareIsOccupiedByEnemy(tl_square,piece_team);
-            bool tr_is_occupied_by_enemy = SquareIsOccupiedByEnemy(tr_square,piece_team);
-
-            if(tl_is_occupied_by_enemy){
+            auto piece_at_tl = GetPieceAt(tl_square);
+            auto piece_at_tr = GetPieceAt(tr_square);
+            
+            if(piece_at_tl && piece_at_tl != piece_team){
                 piece_legal_moves.push_back(tl_square);
+                piece_capture_moves.push_back(tl_square);
             }
             
-            if(tr_is_occupied_by_enemy){
+            if(piece_at_tr && piece_at_tr != piece_team){
                 piece_legal_moves.push_back(tr_square);
+                piece_capture_moves.push_back(tr_square);
             }
 
             //@TODO ENPASSANT
@@ -400,10 +423,16 @@ void Board::GenerateLegalMoves(const Core::Ref<Piece> piece) {
 
             for(auto& possible_pos : unchecked_knight_pos){
                 if(IsOnBoard(possible_pos)){
-                    if(SquareIsOccupiedByEnemy(possible_pos,piece_team)){
-                        //@todo add ptr on attacked piece or smth like
+                    auto piece_at = GetPieceAt(possible_pos);
+
+                    if(piece_at && piece_at != piece_team){
+                        piece_capture_moves.push_back(possible_pos);
+                        piece_legal_moves.push_back(possible_pos);
+                    }else if(piece_at && piece_at == piece_team){
+                        
+                    }else{
+                        piece_legal_moves.push_back(possible_pos);
                     }
-                    piece_legal_moves.push_back(possible_pos);
                 }
             }
             break;
@@ -426,6 +455,7 @@ void Board::GenerateRookLegalMoves(const Core::Ref<Piece> piece) {
     PieceType piece_type = piece->GetPieceType();
     Team piece_team = piece->GetTeam();
     std::vector<Vec2i>& piece_legal_moves = piece->GetLegalMoves();
+    std::vector<Vec2i>& piece_capture_moves = piece->GetCaptureMoves();
     Vec2i piece_pos = piece->GetPosition();
 
     Team enemy_team = (piece_team == Team::BLACK) ? Team::WHITE : Team::BLACK;
@@ -445,11 +475,18 @@ void Board::GenerateRookLegalMoves(const Core::Ref<Piece> piece) {
     uint8_t flags = 0;
 
     for(;((flags ^ (mask[0] | mask[1] | mask[2] | mask[3])) != 0); moves_left.x -= 1, moves_right.x += 1, moves_up.y -= 1, moves_down.y += 1){
-        
+        auto piece_at_ml = GetPieceAt(moves_left),
+             piece_at_mr = GetPieceAt(moves_right),
+             piece_at_mu = GetPieceAt(moves_up), 
+             piece_at_md = GetPieceAt(moves_down);
+
         if(!IsOnBoard(moves_left)){
             flags |= mask[0];
-        }else if(SquareIsOccupiedByEnemy(moves_left,piece_team) && (flags & mask[0]) == 0){
-
+        }else if(piece_at_ml && (flags & mask[0]) == 0){
+            if(piece_at_ml != piece_team){
+                piece_capture_moves.push_back(moves_left);
+                piece_legal_moves.push_back(moves_left);
+            }
             flags |= mask[0];
         }else{
             if((flags & mask[0]) == 0){
@@ -459,7 +496,11 @@ void Board::GenerateRookLegalMoves(const Core::Ref<Piece> piece) {
 
         if(!IsOnBoard(moves_right)){
             flags |= mask[1];
-        }else if(SquareIsOccupiedByEnemy(moves_right,piece_team) && (flags & mask[1]) == 0){
+        }else if(piece_at_mr && (flags & mask[1]) == 0){
+            if(piece_at_mr != piece_team){
+                piece_capture_moves.push_back(moves_right);
+                piece_legal_moves.push_back(moves_right);
+            }
             flags |= mask[1];
         }
         else{
@@ -470,7 +511,12 @@ void Board::GenerateRookLegalMoves(const Core::Ref<Piece> piece) {
 
         if(!IsOnBoard(moves_up)){
             flags |= mask[2];
-        }else if(SquareIsOccupiedByEnemy(moves_up,piece_team) && (flags & mask[2]) == 0){
+        }else if(piece_at_mu && (flags & mask[2]) == 0){
+            if(piece_at_mu != piece_team){
+                piece_capture_moves.push_back(moves_up);
+                piece_legal_moves.push_back(moves_up);
+            }
+
             flags |= mask[2];
         }
         else{
@@ -481,7 +527,12 @@ void Board::GenerateRookLegalMoves(const Core::Ref<Piece> piece) {
 
         if(!IsOnBoard(moves_down)){
             flags |= mask[3];
-        }else if(SquareIsOccupiedByEnemy(moves_down,piece_team) && (flags & mask[3]) == 0){
+        }else if(piece_at_md && (flags & mask[3]) == 0){
+            if(piece_at_md != piece_team){
+                piece_capture_moves.push_back(moves_down);
+                piece_legal_moves.push_back(moves_down);
+            }
+
             flags |= mask[3];
         }
         else{
@@ -497,6 +548,7 @@ void Board::GenerateBishopLegalMoves(const Core::Ref<Piece> piece) {
      PieceType piece_type = piece->GetPieceType();
     Team piece_team = piece->GetTeam();
     std::vector<Vec2i>& piece_legal_moves = piece->GetLegalMoves();
+    std::vector<Vec2i>& piece_capture_moves = piece->GetCaptureMoves();
     Vec2i piece_pos = piece->GetPosition();
 
     Team enemy_team = (piece_team == Team::BLACK) ? Team::WHITE : Team::BLACK;
@@ -521,10 +573,18 @@ void Board::GenerateBishopLegalMoves(const Core::Ref<Piece> piece) {
         towards_br_dir = (moves_br - piece_pos);
 
     for(;((flags ^ (mask[0] | mask[1] | mask[2] | mask[3])) != 0); moves_tl += towards_tl_dir, moves_tr += towards_tr_dir,moves_bl += towards_bl_dir,moves_br += towards_br_dir){
+        auto piece_at_tl = GetPieceAt(moves_tl),
+             piece_at_tr = GetPieceAt(moves_tr),
+             piece_at_bl= GetPieceAt(moves_bl), 
+             piece_at_br = GetPieceAt(moves_br);
+
         if(!IsOnBoard(moves_tl)){
             flags |= mask[0];
-        }else if(SquareIsOccupiedByEnemy(moves_tl,piece_team) && (flags & mask[0]) == 0){
-
+        }else if(piece_at_tl && (flags & mask[0]) == 0){
+            if(piece_at_tl != piece_team){
+                piece_capture_moves.push_back(moves_tl);
+                piece_legal_moves.push_back(moves_tl);
+            }
             flags |= mask[0];
         }else{
             if((flags & mask[0]) == 0){
@@ -534,7 +594,11 @@ void Board::GenerateBishopLegalMoves(const Core::Ref<Piece> piece) {
 
         if(!IsOnBoard(moves_tr)){
             flags |= mask[1];
-        }else if(SquareIsOccupiedByEnemy(moves_tr,piece_team) && (flags & mask[1]) == 0){
+        }else if(piece_at_tr && (flags & mask[1]) == 0){
+            if(piece_at_tr != piece_team){
+                piece_capture_moves.push_back(moves_tr);
+                piece_legal_moves.push_back(moves_tr);
+            }
             flags |= mask[1];
         }
         else{
@@ -545,7 +609,11 @@ void Board::GenerateBishopLegalMoves(const Core::Ref<Piece> piece) {
 
         if(!IsOnBoard(moves_bl)){
             flags |= mask[2];
-        }else if(SquareIsOccupiedByEnemy(moves_bl,piece_team) && (flags & mask[2]) == 0){
+        }else if(piece_at_bl && (flags & mask[2]) == 0){
+            if(piece_at_bl != piece_team){
+                piece_capture_moves.push_back(moves_bl);
+                piece_legal_moves.push_back(moves_bl);
+            }
             flags |= mask[2];
         }
         else{
@@ -556,7 +624,11 @@ void Board::GenerateBishopLegalMoves(const Core::Ref<Piece> piece) {
 
         if(!IsOnBoard(moves_br)){
             flags |= mask[3];
-        }else if(SquareIsOccupiedByEnemy(moves_br,piece_team) && (flags & mask[3]) == 0){
+        }else if(piece_at_br && (flags & mask[3]) == 0){
+            if(piece_at_br != piece_team){
+                piece_capture_moves.push_back(moves_br);
+                piece_legal_moves.push_back(moves_br);
+            }
             flags |= mask[3];
         }
         else{
@@ -568,15 +640,19 @@ void Board::GenerateBishopLegalMoves(const Core::Ref<Piece> piece) {
 
 }
 
-void Board::ForEachPiece(const std::function<void(const Core::Ref<Piece>)> &callback)
+void Board::ForEachAlivePiece(const std::function<void(const Core::Ref<Piece>)> &callback)
 {
     for(auto& piece : m_Pieces){
+        if(piece->IsKilled()) continue;
+        
         callback(piece);
     }
 }
 
 bool Board::IsMakeableMove(const Core::Ref<Piece> piece, Vec2i move_to) {
-  return (IsOnBoard(move_to) && piece->IsLegalMove(move_to));
+    if(!IsOnBoard(move_to)) 
+        return false;
+  return (piece->IsLegalMove(move_to) || piece->IsCaptureMove(move_to));
 }
 
 void Board::MakeMove(const Core::Ref<Piece> piece, Vec2i move)

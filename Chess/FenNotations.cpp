@@ -47,11 +47,11 @@ void ForsythEdwards::SetupCustomBoardPosition(const char* fen,Board& board)
             --new_pos.y;
         }else if(is_piece_symbol(fen[i]) && space_cnt < 1){
             auto curr_piece = create_piece(fen[i]);
+            curr_piece->Revive();
 
             curr_piece->SetPosition(new_pos);
             ++new_pos.x;
             
-            curr_piece->Revive();
 
             pieces.push_back(curr_piece);
         }

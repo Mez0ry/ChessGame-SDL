@@ -1,14 +1,15 @@
 #include "MoveTo.hpp"
 #include "Lerp.hpp"
+#include "Move.hpp"
 
-MoveTo::MoveTo(Board &board, Core::Ref<Piece> piece, const SmoothMove &smooth_move) : m_Board(board),m_Piece(piece), m_SmoothMove(smooth_move)
+MoveTo::MoveTo(Board &board, Core::Ref<Piece> piece, const Move &smooth_move) : m_Board(board),m_Piece(piece), m_SmoothMove(smooth_move)
 {
     //board.GeneratePossibleMoves(piece);
 }
 
 CommandStatus MoveTo::Execute(std::optional<float> dt)
 {
-    m_Board.ForEachPiece([&](const Core::Ref<Piece> piece){
+    m_Board.ForEachAlivePiece([&](const Core::Ref<Piece> piece){
         m_Board.GenerateLegalMoves(piece);
     });
 
@@ -16,7 +17,8 @@ CommandStatus MoveTo::Execute(std::optional<float> dt)
         m_Board.SetTextureEntityPosition(m_Piece);
         return CommandStatus::FAILED;
     }
-    
+    //if is there any pieces to kill
+
     auto& keyframe = m_SmoothMove.keyframe;
 
     if(keyframe.IsActionEmpty()){
@@ -32,6 +34,12 @@ CommandStatus MoveTo::Execute(std::optional<float> dt)
 
     if(dt){
         keyframe.Update(dt.value());
+    }
+
+    if(keyframe.GetElapsedFrames() > m_SmoothMove.frame_duration * 0.9f){
+        if(m_SmoothMove.piece_to_kill){
+            m_SmoothMove.piece_to_kill->Kill();
+        }
     }
     
     if(keyframe.IsFinished()){

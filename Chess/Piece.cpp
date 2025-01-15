@@ -48,7 +48,12 @@ Team Piece::GetTeam() const
 
 void Piece::Kill()
 {
+   if(IsKilled())
+        return;
+
     m_IsKilled = true;
+    m_PrevPos = m_Position;
+    m_Position = {-1,-1};
 }
 
 bool Piece::IsKilled() const
@@ -58,7 +63,13 @@ bool Piece::IsKilled() const
 
 void Piece::Revive()
 {
+    if(!IsKilled()) 
+        return;
+    
     m_IsKilled = false;
+
+    m_Position = m_PrevPos;
+    m_PrevPos = {-1,-1};
 }
 
 void Piece::Render(const Core::Ref<Renderer> renderer)
@@ -123,4 +134,16 @@ bool Piece::IsLegalMove(const Vec2i& square) const
     return (std::find_if(m_LegalMoves.begin(),m_LegalMoves.end(),[&](const Vec2i& possible_move){
         return (possible_move == square);
     }) != m_LegalMoves.end());
+}
+
+std::vector<Vec2i> &Piece::GetCaptureMoves()
+{
+    return m_CaptureMoves;
+}
+
+bool Piece::IsCaptureMove(const Vec2i &square) const
+{
+    return (std::find_if(m_CaptureMoves.begin(),m_CaptureMoves.end(),[&](const Vec2i& possible_capture_move){
+        return (possible_capture_move == square);
+    }) != m_CaptureMoves.end());
 }
