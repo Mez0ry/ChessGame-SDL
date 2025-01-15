@@ -13,7 +13,7 @@
 
 Board::Board(const Core::Ref<Renderer> renderer,const Core::Ref<Window> window) : m_TeamToMove(Team::WHITE), m_Renderer(renderer),m_Window(window)
 {
-
+    
 }
 
 Board::~Board()
@@ -62,6 +62,11 @@ void Board::Setup(ObjectSize board_size,Core::Ref<IChessModes> chess_mode,const 
     m_BoardTopLeft.x = m_BoardTopLeftMemento.GetState().x;
     m_BoardTopLeft.y = -m_FullBoardSize.GetHeight();
 
+    m_CaptureMoveHighlightTexture.LoadTexture(m_Renderer,"resources/game/square_highlight/attackable_square.png");
+    m_LegalMoveHighlightTexture.LoadTexture(m_Renderer,"resources/game/square_highlight/available_move.png");
+
+    m_CaptureMoveHighlightTexture.SetSize(m_OneSquareSizeSrc);
+    m_LegalMoveHighlightTexture.SetSize(m_OneSquareSizeSrc);
 }
 
 void Board::OnCreate()
@@ -104,6 +109,9 @@ void Board::OnResize([[maybe_unused]] const Core::Ref<Window> window)
         SetTextureEntityPosition(piece);
     }
 
+    m_CaptureMoveHighlightTexture.SetSize(m_OneSquareSize);
+    m_LegalMoveHighlightTexture.SetSize(m_OneSquareSize);
+
 }
 
 void Board::OnDestroy()
@@ -132,8 +140,9 @@ void Board::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> event_han
             }
         }
     }
-    
+
     if(MouseInput::GetMouseState(MouseState::MOUSE_BUTTON_UP)){
+
         if(MouseInput::IsReleased(SDL_BUTTON_LEFT)){
             Vec2i diff = cursor_pos - m_BoardTopLeft;
 
@@ -146,23 +155,24 @@ void Board::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> event_han
                 if(piece->IsDragging()){
                     Vec2i curr_relative_pos = GetRelativePos((*this),move_to);
 
-                    Move smooth_move;
-                    smooth_move.piece_to_move = piece;
-                    smooth_move.move_from = initial_drag_pos;
-                    smooth_move.move_to = curr_relative_pos;
+                    Move move;
+                    move.piece_to_move = piece;
+                    move.move_from = initial_drag_pos;
+                    move.move_to = curr_relative_pos;
 
-                    smooth_move.board_move_to = move_to;
+                    move.board_move_to = move_to;
+                    move.board_move_from = piece->GetPosition();
                     
                     auto piece_at = GetPieceAt(move_to);
                     if(piece_at && piece_at != piece->GetTeam()){
-                        smooth_move.piece_to_kill = piece_at;
+                        move.piece_to_kill = piece_at;
                     }
 
-                    smooth_move.frame_duration = 1.f;
+                    move.frame_duration = 1.f;
 
-                    smooth_move.easing_type = Stellar::Easing::EaseInSine;
+                    move.easing_type = Stellar::Easing::EaseInSine;
 
-                    m_EntityCommands.push_back(Core::CreateRef<MoveTo>((*this),piece,smooth_move));
+                    m_EntityCommands.push_back(Core::CreateRef<MoveTo>((*this),piece,move));
                     piece->StopDragging();
                 }
             }
@@ -212,6 +222,18 @@ void Board::Render(const Core::Ref<Renderer> renderer)
         if(IsOnBoard(piece) && piece && !piece->IsKilled()){
             if(m_BoardTopLeftKF.GetElapsedFrames() > 0.7f && !m_BoardTopLeftKF.IsFinished()){
                 SetTextureEntityPosition(piece);
+            }else if(piece->IsDragging()){
+                auto& legal_moves = piece->GetLegalMoves();
+                auto& capture_moves = piece->GetCaptureMoves();
+                
+                for(auto& legal_mv : legal_moves){
+                    HighlightSquare(legal_mv,m_LegalMoveHighlightTexture);
+                }
+
+                for(auto& capture_mv : capture_moves){
+                    HighlightSquare(capture_mv,m_CaptureMoveHighlightTexture);
+                }
+
             }
             piece->Render(renderer);
         }
@@ -256,6 +278,23 @@ void Board::SetTextureEntityPosition(const Core::Ref<IEntity> &entity)
     Vec2i relative_pos = GetRelativePos((*this),entity);
     
     entity_texture.SetPosition(relative_pos);
+}
+
+void Board::SetTexturePosAtSquare(Board& board, Texture& texture,const Vec2i& square)
+{
+    Vec2i board_tl = board.GetBoardTopLeft();
+    ObjectSize one_square_size = board.GetOneSquareSize();
+    
+    Vec2i pos_on_board;
+    
+    pos_on_board.x = board_tl.x + square.x * one_square_size.GetWidth();
+    pos_on_board.y = board_tl.y + square.y * one_square_size.GetHeight();
+
+    texture.SetPosition(pos_on_board);
+}
+
+void Board::SetCurrentTurn(Team team) {
+    m_TeamToMove = team;
 }
 
 void Board::AddPiece(const Core::Ref<Piece> piece) {
@@ -313,6 +352,20 @@ bool Board::SquareIsOccupied(const Vec2i &square_pos) const
    return (FindPiece([&](const Core::Ref<Piece> piece) -> bool{
         return (piece->GetPosition() == square_pos);
     })) != nullptr;
+}
+
+void Board::HighlightSquare(const Vec2i &square, Texture &texture)
+{
+    if(!IsOnBoard(square)){
+        STELLAR_ERROR("square that you are trying to highlight is out of board");
+    }
+
+    if(SDL_SetTextureBlendMode(texture,SDL_BLENDMODE_BLEND)){
+        STELLAR_ERROR("Failed to set texture blend mode");
+    }
+    
+    SetTexturePosAtSquare((*this),texture,square);
+    m_Renderer->Render(texture);
 }
 
 Vec2i Board::GetRelativePos(Board &board, const Vec2i &board_pos)
@@ -411,17 +464,19 @@ void Board::GenerateLegalMoves(const Core::Ref<Piece> piece) {
         }
 
         case PieceType::KNIGHT:{
-           std::array<Vec2i,8> unchecked_knight_pos = {Vec2i(piece_pos.x - 2, piece_pos.y + 1),
-                                                        Vec2i(piece_pos.x - 2, piece_pos.y - 1),
-                                                        Vec2i(piece_pos.x + 2, piece_pos.y + 1),
-                                                        Vec2i(piece_pos.x + 2, piece_pos.y - 1),
-                                                        Vec2i(piece_pos.x - 1, piece_pos.y + 2),
-                                                        Vec2i(piece_pos.x + 1, piece_pos.y + 2),
-                                                        Vec2i(piece_pos.x - 1, piece_pos.y - 2),
-                                                        Vec2i(piece_pos.x + 1, piece_pos.y - 2),
-                                                       };
 
-            for(auto& possible_pos : unchecked_knight_pos){
+           constexpr std::array<Vec2i,8> unchecked_knight_pos = {Vec2i( - 2,1),
+                                                                Vec2i(-2,-1),
+                                                                Vec2i(2,1),
+                                                                Vec2i(2, -1),
+                                                                Vec2i(-1,2),
+                                                                Vec2i(1,2),
+                                                                Vec2i(-1,-2),
+                                                                Vec2i(1,- 2)
+           };
+
+            for(auto& offset: unchecked_knight_pos){
+                Vec2i possible_pos = piece_pos + offset;
                 if(IsOnBoard(possible_pos)){
                     auto piece_at = GetPieceAt(possible_pos);
 
@@ -443,7 +498,7 @@ void Board::GenerateLegalMoves(const Core::Ref<Piece> piece) {
             GenerateBishopLegalMoves(piece);
             break;
         }
-
+        
         case PieceType::KING:{
 
             break;
@@ -655,9 +710,35 @@ bool Board::IsMakeableMove(const Core::Ref<Piece> piece, Vec2i move_to) {
   return (piece->IsLegalMove(move_to) || piece->IsCaptureMove(move_to));
 }
 
-void Board::MakeMove(const Core::Ref<Piece> piece, Vec2i move)
+void Board::MakeMove(const Core::Ref<Piece> piece, Move& move)
 {
-    piece->SetPosition(move);
+    piece->SetPosition(move.board_move_to);
+    m_BoardMoves.push(move);
+}
+
+void Board::UnmakeMove() {
+    if(m_BoardMoves.empty()) 
+        return;
+
+    const auto& move = m_BoardMoves.top();
+    const auto& piece_to_move = move.piece_to_move;
+    const auto& piece_to_revive = move.piece_to_kill;
+
+    if(!piece_to_move)
+        return;
+    
+    piece_to_move->SetPosition(move.board_move_from);
+    SetTextureEntityPosition(piece_to_move);
+
+    if(piece_to_revive){
+        piece_to_revive->Revive();
+    }
+
+    ForEachAlivePiece([&](const Core::Ref<Piece> piece){
+        GenerateLegalMoves(piece);
+    });
+
+    m_BoardMoves.pop();
 }
 
 void Board::SetupPieceTextures() {

@@ -2,8 +2,7 @@
 #define __BOARD_HPP__
 #include <vector>
 #include <functional>
-#include <unordered_map>
-#include <queue>
+#include <stack>
 #include <array>
 
 #include "FenNotations.hpp"
@@ -54,12 +53,16 @@ public:
     ObjectSize GetBoardSize() const;
 
     ObjectSize GetOneSquareSize() const;
-
+    
 public:
     bool IsOnBoard( const Core::Ref<IEntity>& entity) const;
     bool IsOnBoard( const Vec2i& pos) const;
     
     void SetTextureEntityPosition(const Core::Ref<IEntity>& entity);
+    static void SetTexturePosAtSquare(Board& board, Texture& texture,const Vec2i& square);
+
+    void SetCurrentTurn(Team team);
+
 public:
 /**
  * @brief adds piece to the board
@@ -93,8 +96,10 @@ public:
 
     bool SquareIsOccupied(const Vec2i& square_pos) const;
 
+    void HighlightSquare(const Vec2i& square, Texture& texture);
+
     static Vec2i GetRelativePos(Board &board, const Vec2i& board_pos);
-    
+
     static Vec2i GetRelativePos(Board& board,const Core::Ref<IEntity> entity);
 
 public:
@@ -105,12 +110,16 @@ public:
     void ForEachAlivePiece(const std::function<void(const Core::Ref<Piece>)>& callback);
 
     bool IsMakeableMove(const Core::Ref<Piece> piece,Vec2i move_to);
-    void MakeMove(const Core::Ref<Piece> piece, Vec2i move);
+    void MakeMove(const Core::Ref<Piece> piece, Move& move);
+    void UnmakeMove();
+
 private:
     void SetupPieceTextures();
 private:
     std::vector<Core::Ref<Piece>> m_Pieces;
     std::vector<Core::Ref<IEntityCommand>> m_EntityCommands;
+    std::stack<Move> m_BoardMoves;
+
     Team m_TeamToMove;
 private:
     Texture m_WhiteSquareTexture, m_BlackSquareTexture;
@@ -127,6 +136,7 @@ private:
     Core::Ref<IChessModes> m_pChessMode;
     Core::Ref<IFenNotation> m_pFenNotation;
 private:
+    Texture m_LegalMoveHighlightTexture,m_CaptureMoveHighlightTexture;
 };
 
 #endif //!__BOARD_HPP__
