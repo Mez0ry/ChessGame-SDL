@@ -5,7 +5,7 @@
 #include "PieceType.hpp"
 #include <array>
 #include "Piece.hpp"
-
+#include <string_view>
 namespace Core{
     template <typename T>
     using Ref = std::shared_ptr<T>;
@@ -22,7 +22,7 @@ public:
      * @param pieces
      * @param board_size
      */
-    virtual void SetupCustomBoardPosition(const char* fen,Board& board) = 0;
+    virtual void SetupCustomBoardPosition(const std::string& fen,Board& board) = 0;
     virtual void SetupStartingBoardPos(Board& board) = 0;
 
 private: 
@@ -33,8 +33,10 @@ class ForsythEdwards : public IFenNotation{
     ForsythEdwards() = default;
     ~ForsythEdwards() = default;
 
-    void SetupCustomBoardPosition(const char* fen, Board& board) override;
+    void SetupCustomBoardPosition(const std::string& fen, Board& board) override;
     void SetupStartingBoardPos(Board& board);
+    private:
+    void ParsePiecePositions(std::string_view pieces_fen,std::vector<Core::Ref<Piece>>& pieces, Vec2i& new_pos);
 
     private:
     const std::array<char,12> m_PiecesCharArr = {'p', 'r', 'n', 'b', 'q','k',
