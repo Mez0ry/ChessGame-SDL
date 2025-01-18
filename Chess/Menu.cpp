@@ -234,6 +234,8 @@ void Navigation::HandleInput([[maybe_unused]] const Core::Ref<EventHandler> even
     tmp_idx -= 1;
     tmp_idx = std::clamp(tmp_idx, size_t(0), m_TextVec.size() - 1);
     SetTextIdx(tmp_idx);
+  }else if(KeyboardInput::IsKeyUp(SDLK_RETURN) && !m_BorderKeyFrame.IsFinished() && !m_TargetChanged){
+    m_TextVec[m_CurrTextIdx].Execute();
   }
 }
 
