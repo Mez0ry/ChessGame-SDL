@@ -2,6 +2,7 @@
 #include "Timer.hpp"
 #include "Engine.hpp"
 #include "EventHandler.hpp"
+#include "AssetManager.hpp"
 
 #include "Easing.hpp"
 #include "Lerp.hpp"
@@ -19,10 +20,14 @@ Application::Application() : m_bIsRunning(true) {
 
   Engine::RegisterModule<Window>("Chess Game SDL",SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,800,700, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
   SDL_SetWindowOpacity(*Engine::GetModule<Window>(),0);
+  
   Engine::RegisterModule<Renderer>(Engine::GetModule<Window>(),-1,SDL_RENDERER_ACCELERATED);
   Engine::RegisterModule<EventHandler>();
 
   Engine::GetModule<Window>()->SetIcon("resources/logo/logo.png");
+  
+  Engine::RegisterModule<AssetManager>("resources/game");
+  Engine::GetModule<AssetManager>()->LoadAssets(Engine::GetModule<Renderer>());
   
   m_SceneManager.AddScene<Menu>(Engine::GetModule<Renderer>(),Engine::GetModule<Window>(),m_SceneManager);
   m_SceneManager.AddChildScene<Menu,Exit>(Engine::GetModule<Renderer>(),Engine::GetModule<Window>(),m_bIsRunning);

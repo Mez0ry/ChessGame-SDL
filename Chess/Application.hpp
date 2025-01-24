@@ -1,6 +1,5 @@
 #ifndef __CHESS_APPLICATION_HPP__
 #define __CHESS_APPLICATION_HPP__
-#include <cstdint>
 #include "SceneManager.hpp"
 #include "KeyFrame.hpp"
 class Application
